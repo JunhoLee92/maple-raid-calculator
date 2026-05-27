@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>메이플 레이드 정산기</title>
+  <meta
+    name="description"
+    content="메이플 레이드 드랍템을 입력하면 파티원별 정산 금액과 송금 경로를 계산해 주는 웹 계산기입니다."
+  />
+  <meta name="robots" content="index,follow" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="메이플 레이드 정산기" />
+  <meta
+    property="og:description"
+    content="드랍템 입력부터 송금 경로 계산까지 한 번에 처리하는 메이플 레이드 정산기"
+  />
+  <meta property="og:url" content="https://example.com/" />
+  <meta property="og:locale" content="ko_KR" />
+  <link rel="canonical" href="https://example.com/" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    window.SITE_CONFIG = {
+      siteUrl: "https://example.com/",
+      adsenseClient: "ca-pub-XXXXXXXXXXXXXXXX",
+      firebase: {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_AUTH_DOMAIN",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_STORAGE_BUCKET",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+      }
+    };
+  </script>
+  <script
+    async
+    src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX"
+    crossorigin="anonymous"
+  ></script>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900">
+  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <header class="overflow-hidden rounded-[2rem] bg-slate-900 text-white shadow-2xl">
+      <div class="grid gap-6 px-6 py-8 md:grid-cols-[1.5fr_1fr] md:px-8 md:py-10">
+        <div>
+          <div class="mb-3 inline-flex rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-slate-200">
+            Web Calculator
+          </div>
+          <h1 class="text-3xl font-black tracking-tight sm:text-4xl">
+            메이플 레이드 정산기
+          </h1>
+          <p class="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
+            드랍템 가격, 획득자, 파티원을 입력하면 실수령액과 송금 경로를 계산합니다.
+            Firebase를 연결하면 공유 링크로 같은 데이터를 불러올 수 있고, 도메인을 연결하면 실제 사이트로 공개할 수 있습니다.
+          </p>
+          <div class="mt-6 flex flex-wrap gap-3">
+            <a
+              href="#calculator"
+              class="rounded-xl bg-emerald-400 px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-emerald-300"
+            >
+              계산기 시작
+            </a>
+            <a
+              href="#deploy-guide"
+              class="rounded-xl border border-white/20 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+            >
+              배포 가이드 보기
+            </a>
+          </div>
+        </div>
+        <div class="rounded-[1.75rem] bg-white/10 p-5 backdrop-blur">
+          <div class="text-sm font-semibold text-slate-200">배포 준비 상태</div>
+          <ul class="mt-4 space-y-3 text-sm text-slate-100">
+            <li>정적 사이트 진입 파일: `index.html`</li>
+            <li>광고 파일: `ads.txt`</li>
+            <li>공유 저장소: Firebase 설정 후 활성화</li>
+            <li>도메인 연결 후 Google AdSense 신청 가능</li>
+          </ul>
+        </div>
+      </div>
+    </header>
+
+    <main id="calculator" class="mt-6 space-y-6">
+      <section class="rounded-[2rem] bg-white p-6 shadow-xl">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 class="text-2xl font-black">공유 링크</h2>
+            <p class="mt-2 text-sm text-slate-600">
+              Firebase가 설정되어 있으면 생성한 링크로 다른 사람도 같은 정산 화면에 접속할 수 있습니다.
+            </p>
+          </div>
+          <div class="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-600" id="syncStatus">
+            Firebase 설정 전: 현재 브라우저에만 임시 저장됩니다.
+          </div>
+        </div>
+
+        <div class="mt-5 grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
+          <input
+            id="shareCode"
+            type="text"
+            readonly
+            placeholder="공유 코드를 생성하세요"
+            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+          />
+          <button
+            type="button"
+            onclick="generateShareCode()"
+            class="rounded-2xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-700"
+          >
+            코드 생성
+          </button>
+          <button
+            type="button"
+            onclick="copyShareLink()"
+            class="rounded-2xl bg-emerald-500 px-5 py-3 font-bold text-white transition hover:bg-emerald-400"
+          >
+            링크 복사
+          </button>
+          <button
+            type="button"
+            onclick="manualSave()"
+            class="rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white transition hover:bg-blue-500"
+          >
+            저장
+          </button>
+        </div>
+      </section>
+
+      <section class="rounded-[2rem] bg-white p-6 shadow-xl">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-2xl font-black">파티원</h2>
+            <p class="mt-1 text-sm text-slate-600">정산 대상 이름을 입력하세요.</p>
+          </div>
+          <button
+            type="button"
+            onclick="addMember()"
+            class="rounded-2xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-700"
+          >
+            + 파티원 추가
+          </button>
+        </div>
+        <div id="members" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"></div>
+      </section>
+
+      <section class="rounded-[2rem] bg-white p-6 shadow-xl">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-2xl font-black">드랍 아이템</h2>
+            <p class="mt-1 text-sm text-slate-600">아이템 가격과 획득자를 입력하세요.</p>
+          </div>
+          <button
+            type="button"
+            onclick="addItem()"
+            class="rounded-2xl bg-emerald-500 px-5 py-3 font-bold text-white transition hover:bg-emerald-400"
+          >
+            + 아이템 추가
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full border-separate border-spacing-y-2">
+            <thead>
+              <tr class="text-left text-sm text-slate-500">
+                <th class="px-3 py-2">아이템명</th>
+                <th class="px-3 py-2">가격</th>
+                <th class="px-3 py-2">획득자</th>
+                <th class="px-3 py-2">삭제</th>
+              </tr>
+            </thead>
+            <tbody id="itemsTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="grid gap-6 lg:grid-cols-[1.6fr_0.8fr]">
+        <div class="space-y-6">
+          <div class="rounded-[2rem] bg-white p-6 shadow-xl">
+            <h2 class="text-2xl font-black">계산 결과</h2>
+            <div id="summary" class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4"></div>
+          </div>
+
+          <div class="rounded-[2rem] bg-white p-6 shadow-xl">
+            <h2 class="text-2xl font-black">송금 경로</h2>
+            <div id="transfers" class="mt-5 space-y-3"></div>
+          </div>
+
+          <div class="rounded-[2rem] bg-white p-6 shadow-xl">
+            <h2 class="text-2xl font-black">최종 실수령액</h2>
+            <div id="finalAmounts" class="mt-5 grid gap-4 md:grid-cols-2"></div>
+          </div>
+        </div>
+
+        <aside class="space-y-6">
+          <div class="rounded-[2rem] bg-white p-6 shadow-xl">
+            <h2 class="text-xl font-black">광고 영역</h2>
+            <p class="mt-2 text-sm leading-6 text-slate-600">
+              `ca-pub-XXXXXXXXXXXXXXXX`와 `data-ad-slot` 값을 실제 AdSense 값으로 교체한 뒤 사용하세요.
+            </p>
+            <div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
+              <ins
+                class="adsbygoogle"
+                style="display:block"
+                data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+                data-ad-slot="1234567890"
+                data-ad-format="auto"
+                data-full-width-responsive="true"
+              ></ins>
+            </div>
+          </div>
+
+          <div id="deploy-guide" class="rounded-[2rem] bg-slate-900 p-6 text-white shadow-xl">
+            <h2 class="text-xl font-black">배포 체크</h2>
+            <ol class="mt-4 space-y-3 text-sm text-slate-200">
+              <li>1. `index.html`을 GitHub Pages, Netlify, Vercel 중 하나에 올립니다.</li>
+              <li>2. 실제 도메인 주소로 `SITE_CONFIG.siteUrl`과 canonical/OG URL을 바꿉니다.</li>
+              <li>3. Firebase 프로젝트를 만들고 Firestore를 켭니다.</li>
+              <li>4. `ads.txt`와 AdSense 코드의 퍼블리셔 ID를 실제 값으로 교체합니다.</li>
+              <li>5. Search Console, AdSense에서 도메인 소유권 검증 후 광고 승인을 진행합니다.</li>
+            </ol>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="mt-6 rounded-[2rem] bg-white p-6 text-sm text-slate-600 shadow-xl">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>메이플 레이드 정산기</div>
+        <div class="flex gap-4">
+          <a href="./privacy.html" class="font-semibold text-slate-900 hover:underline">개인정보처리방침</a>
+          <a href="./ads.txt" class="font-semibold text-slate-900 hover:underline">ads.txt</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module">
+    const siteConfig = window.SITE_CONFIG || {};
+    const localStorageKey = "maple-raid-calculator-draft";
+    const defaultMembers = ["갑", "을", "병", "정"].map((name) => ({ name }));
+    const defaultItems = [{ name: "", price: 0, owner: "갑" }];
+    const validFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
+
+    let members = structuredClone(defaultMembers);
+    let items = structuredClone(defaultItems);
+    let currentCode = "";
+    let db = null;
+    let firebaseReady = false;
+
+    function hasFirebaseConfig(config) {
+      if (!config) return false;
+      return validFirebaseConfigKeys.every((key) => {
+        const value = String(config[key] || "").trim();
+        return value && !value.startsWith("YOUR_");
+      });
+    }
+
+    function setSyncStatus(message) {
+      document.getElementById("syncStatus").textContent = message;
+    }
+
+    function getShareUrl(code) {
+      const configuredUrl = String(siteConfig.siteUrl || "").trim();
+      const baseUrl = configuredUrl && !configuredUrl.includes("example.com")
+        ? configuredUrl.replace(/\/$/, "")
+        : `${window.location.origin}${window.location.pathname}`;
+      return `${baseUrl}?room=${encodeURIComponent(code)}`;
+    }
+
+    function generateRandomCode() {
+      return Math.random().toString(36).substring(2, 8).toUpperCase();
+    }
+
+    function persistLocalDraft() {
+      localStorage.setItem(
+        localStorageKey,
+        JSON.stringify({
+          members,
+          items,
+          currentCode
+        })
+      );
+    }
+
+    function restoreLocalDraft() {
+      try {
+        const raw = localStorage.getItem(localStorageKey);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        members = Array.isArray(draft.members) && draft.members.length ? draft.members : structuredClone(defaultMembers);
+        items = Array.isArray(draft.items) && draft.items.length ? draft.items : structuredClone(defaultItems);
+        currentCode = typeof draft.currentCode === "string" ? draft.currentCode : "";
+      } catch (error) {
+        console.error("로컬 초안 복원 실패", error);
+      }
+    }
+
+    async function initializeFirebase() {
+      if (!hasFirebaseConfig(siteConfig.firebase)) {
+        setSyncStatus("Firebase 설정 전: 현재 브라우저에만 임시 저장됩니다.");
+        return;
+      }
+
+      try {
+        const [{ initializeApp }, { getFirestore, doc, setDoc, getDoc }] = await Promise.all([
+          import("https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js"),
+          import("https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js")
+        ]);
+
+        const app = initializeApp(siteConfig.firebase);
+        db = { firestore: getFirestore(app), doc, setDoc, getDoc };
+        firebaseReady = true;
+        setSyncStatus("Firebase 연결 완료: 공유 링크 저장과 불러오기를 사용할 수 있습니다.");
+      } catch (error) {
+        console.error("Firebase 초기화 실패", error);
+        setSyncStatus("Firebase 연결 실패: 현재 브라우저에만 임시 저장됩니다.");
+      }
+    }
+
+    async function saveData() {
+      persistLocalDraft();
+
+      if (!firebaseReady || !currentCode) {
+        return;
+      }
+
+      await db.setDoc(
+        db.doc(db.firestore, "rooms", currentCode),
+        {
+          members,
+          items,
+          updatedAt: Date.now()
+        }
+      );
+    }
+
+    async function loadSharedData() {
+      const params = new URLSearchParams(window.location.search);
+      const room = params.get("room");
+      if (!room) return;
+
+      currentCode = room.trim().toUpperCase();
+      document.getElementById("shareCode").value = currentCode;
+
+      if (!firebaseReady) {
+        setSyncStatus("공유 링크 감지됨: Firebase 설정 후 이 링크로 데이터를 공유할 수 있습니다.");
+        return;
+      }
+
+      const snapshot = await db.getDoc(db.doc(db.firestore, "rooms", currentCode));
+      if (!snapshot.exists()) {
+        setSyncStatus("공유 링크는 열렸지만 저장된 데이터가 없습니다. 새로 입력 후 저장하세요.");
+        return;
+      }
+
+      const data = snapshot.data();
+      members = Array.isArray(data.members) && data.members.length ? data.members : structuredClone(defaultMembers);
+      items = Array.isArray(data.items) && data.items.length ? data.items : structuredClone(defaultItems);
+      setSyncStatus("공유 데이터 불러오기 완료");
+    }
+
+    function format(number) {
+      return Math.floor(Number(number) || 0).toLocaleString("ko-KR");
+    }
+
+    function getFeeRate(amount) {
+      if (amount >= 100000000) return 0.06;
+      if (amount >= 25000000) return 0.05;
+      if (amount >= 10000000) return 0.04;
+      if (amount >= 5000000) return 0.03;
+      if (amount >= 1000000) return 0.018;
+      if (amount >= 100000) return 0.008;
+      return 0;
+    }
+
+    function calculateFee(amount) {
+      if (amount < 100000) return 0;
+      return Math.floor(amount * getFeeRate(amount)) + 10000;
+    }
+
+    function normalizeMembers() {
+      members = members
+        .map((member, index) => ({
+          name: String(member.name || "").trim() || `파티원${index + 1}`
+        }))
+        .filter((member, index, array) => array.findIndex((target) => target.name === member.name) === index);
+
+      if (!members.length) {
+        members = structuredClone(defaultMembers);
+      }
+
+      const memberNames = members.map((member) => member.name);
+      items = items.map((item) => ({
+        ...item,
+        owner: memberNames.includes(item.owner) ? item.owner : memberNames[0]
+      }));
+    }
+
+    window.generateShareCode = async function generateShareCode() {
+      currentCode = generateRandomCode();
+      document.getElementById("shareCode").value = currentCode;
+      window.history.replaceState({}, "", `?room=${encodeURIComponent(currentCode)}`);
+      await saveData();
+      alert(firebaseReady ? "공유 코드가 생성되고 저장되었습니다." : "공유 코드가 생성되었습니다. Firebase를 연결하면 이 코드로 공유할 수 있습니다.");
+    };
+
+    window.copyShareLink = async function copyShareLink() {
+      if (!currentCode) {
+        alert("먼저 공유 코드를 생성하세요.");
+        return;
+      }
+
+      await navigator.clipboard.writeText(getShareUrl(currentCode));
+      alert("공유 링크가 복사되었습니다.");
+    };
+
+    window.manualSave = async function manualSave() {
+      if (!currentCode) {
+        alert("먼저 공유 코드를 생성하세요.");
+        return;
+      }
+
+      try {
+        await saveData();
+        alert(firebaseReady ? "Firebase와 브라우저에 저장되었습니다." : "브라우저에 임시 저장되었습니다.");
+      } catch (error) {
+        console.error(error);
+        alert("저장 중 오류가 발생했습니다.");
+      }
+    };
+
+    window.addMember = function addMember() {
+      members.push({ name: `파티원${members.length + 1}` });
+      normalizeMembers();
+      renderMembers();
+      renderItems();
+      calculate();
+    };
+
+    window.removeMember = function removeMember(index) {
+      members.splice(index, 1);
+      normalizeMembers();
+      renderMembers();
+      renderItems();
+      calculate();
+    };
+
+    window.addItem = function addItem() {
+      members = members.length ? members : structuredClone(defaultMembers);
+      items.push({
+        name: "",
+        price: 0,
+        owner: members[0].name
+      });
+      renderItems();
+      calculate();
+    };
+
+    window.removeItem = function removeItem(index) {
+      items.splice(index, 1);
+      if (!items.length) {
+        items = structuredClone(defaultItems);
+        items[0].owner = members[0]?.name || defaultMembers[0].name;
+      }
+      renderItems();
+      calculate();
+    };
+
+    function renderMembers() {
+      const membersDiv = document.getElementById("members");
+      membersDiv.innerHTML = members
+        .map(
+          (member, index) => `
+            <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+              <div class="flex gap-3">
+                <input
+                  type="text"
+                  value="${member.name}"
+                  class="member-input w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                  data-index="${index}"
+                />
+                <button
+                  type="button"
+                  onclick="removeMember(${index})"
+                  class="rounded-2xl bg-rose-500 px-4 py-3 font-bold text-white transition hover:bg-rose-400"
+                >
+                  삭제
+                </button>
+              </div>
+            </div>
+          `
+        )
+        .join("");
+
+      document.querySelectorAll(".member-input").forEach((input) => {
+        input.addEventListener("change", function onMemberChange() {
+          const index = Number(this.dataset.index);
+          members[index].name = this.value;
+          normalizeMembers();
+          renderMembers();
+          renderItems();
+          calculate();
+        });
+      });
+    }
+
+    function renderItems() {
+      const tbody = document.getElementById("itemsTable");
+      const options = members
+        .map((member) => `<option value="${member.name}">${member.name}</option>`)
+        .join("");
+
+      tbody.innerHTML = items
+        .map(
+          (item, index) => `
+            <tr class="rounded-2xl bg-slate-50">
+              <td class="px-3 py-2">
+                <input
+                  type="text"
+                  value="${item.name}"
+                  class="item-name w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                  data-index="${index}"
+                />
+              </td>
+              <td class="px-3 py-2">
+                <input
+                  type="number"
+                  min="0"
+                  value="${item.price}"
+                  class="item-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                  data-index="${index}"
+                />
+              </td>
+              <td class="px-3 py-2">
+                <select
+                  class="item-owner w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                  data-index="${index}"
+                >
+                  ${options}
+                </select>
+              </td>
+              <td class="px-3 py-2">
+                <button
+                  type="button"
+                  onclick="removeItem(${index})"
+                  class="w-full rounded-2xl bg-rose-500 px-4 py-3 font-bold text-white transition hover:bg-rose-400"
+                >
+                  삭제
+                </button>
+              </td>
+            </tr>
+          `
+        )
+        .join("");
+
+      document.querySelectorAll(".item-owner").forEach((select) => {
+        const index = Number(select.dataset.index);
+        select.value = items[index].owner;
+      });
+
+      document.querySelectorAll(".item-name").forEach((input) => {
+        input.addEventListener("change", function onItemNameChange() {
+          items[Number(this.dataset.index)].name = this.value;
+          persistLocalDraft();
+        });
+      });
+
+      document.querySelectorAll(".item-price").forEach((input) => {
+        input.addEventListener("change", function onItemPriceChange() {
+          items[Number(this.dataset.index)].price = Number(this.value || 0);
+          calculate();
+        });
+      });
+
+      document.querySelectorAll(".item-owner").forEach((select) => {
+        select.addEventListener("change", function onItemOwnerChange() {
+          items[Number(this.dataset.index)].owner = this.value;
+          calculate();
+        });
+      });
+    }
+
+    function renderResult(result) {
+      document.getElementById("summary").innerHTML = `
+        <div class="rounded-[1.5rem] bg-slate-100 p-5">
+          <div class="text-sm text-slate-500">총 판매 금액</div>
+          <div class="mt-2 text-3xl font-black">${format(result.total)}</div>
+        </div>
+        <div class="rounded-[1.5rem] bg-blue-50 p-5">
+          <div class="text-sm text-slate-500">목표 실수령액</div>
+          <div class="mt-2 text-3xl font-black text-blue-700">${format(result.target)}</div>
+        </div>
+        <div class="rounded-[1.5rem] bg-rose-50 p-5">
+          <div class="text-sm text-slate-500">총 수수료 예상</div>
+          <div class="mt-2 text-3xl font-black text-rose-600">${format(result.totalFee)}</div>
+        </div>
+        <div class="rounded-[1.5rem] bg-emerald-50 p-5">
+          <div class="text-sm text-slate-500">파티원 수</div>
+          <div class="mt-2 text-3xl font-black text-emerald-600">${members.length}</div>
+        </div>
+      `;
+
+      document.getElementById("transfers").innerHTML = result.transfers.length
+        ? result.transfers
+            .map(
+              (transfer) => `
+                <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+                  <div class="text-xl font-black">${transfer.from} -> ${transfer.to}</div>
+                  <div class="mt-2 text-sm text-slate-600">송금액: <span class="font-bold text-slate-900">${format(transfer.amount)}</span></div>
+                  <div class="mt-1 text-sm text-slate-600">수수료: <span class="font-bold text-rose-600">${format(transfer.fee)}</span></div>
+                  <div class="mt-3 text-base font-bold">총 지출 ${format(transfer.totalCost)}</div>
+                </div>
+              `
+            )
+            .join("")
+        : '<div class="rounded-[1.5rem] bg-slate-100 p-5 text-sm text-slate-600">송금 없이 바로 균등 분배됩니다.</div>';
+
+      document.getElementById("finalAmounts").innerHTML = Object.entries(result.finalAmounts)
+        .map(
+          ([name, amount]) => `
+            <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+              <div class="text-sm text-slate-500">${name}</div>
+              <div class="mt-2 text-4xl font-black text-blue-700">${format(amount)}</div>
+            </div>
+          `
+        )
+        .join("");
+    }
+
+    function calculate() {
+      normalizeMembers();
+
+      const originalAmounts = Object.fromEntries(members.map((member) => [member.name, 0]));
+      let total = 0;
+
+      items.forEach((item) => {
+        const owner = originalAmounts[item.owner] !== undefined ? item.owner : members[0].name;
+        const price = Number(item.price || 0);
+        originalAmounts[owner] += price;
+        total += price;
+      });
+
+      if (!members.length) {
+        renderResult({
+          total: 0,
+          target: 0,
+          transfers: [],
+          finalAmounts: {},
+          totalFee: 0
+        });
+        return;
+      }
+
+      const average = Math.floor(total / members.length);
+      let bestResult = null;
+
+      for (let target = average - 3000000; target <= average + 3000000; target += 1000) {
+        const senders = [];
+        const receivers = [];
+
+        Object.entries(originalAmounts).forEach(([name, amount]) => {
+          if (amount > target) {
+            senders.push({ name, remaining: amount - target });
+          } else if (amount < target) {
+            receivers.push({ name, needed: target - amount });
+          }
+        });
+
+        const transfers = [];
+        let senderIndex = 0;
+        let receiverIndex = 0;
+
+        while (senderIndex < senders.length && receiverIndex < receivers.length) {
+          const sender = senders[senderIndex];
+          const receiver = receivers[receiverIndex];
+          let low = 0;
+          let high = Math.floor(receiver.needed);
+          let bestAmount = 0;
+
+          while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            const fee = calculateFee(mid);
+            const totalCost = mid + fee;
+
+            if (totalCost <= sender.remaining) {
+              bestAmount = mid;
+              low = mid + 1;
+            } else {
+              high = mid - 1;
+            }
+          }
+
+          if (bestAmount <= 0) {
+            senderIndex += 1;
+            continue;
+          }
+
+          const fee = calculateFee(bestAmount);
+          const totalCost = bestAmount + fee;
+
+          sender.remaining -= totalCost;
+          receiver.needed -= bestAmount;
+          transfers.push({
+            from: sender.name,
+            to: receiver.name,
+            amount: bestAmount,
+            fee,
+            totalCost
+          });
+
+          if (sender.remaining <= 0) senderIndex += 1;
+          if (receiver.needed <= 0) receiverIndex += 1;
+        }
+
+        const finalAmounts = { ...originalAmounts };
+        let totalFee = 0;
+
+        transfers.forEach((transfer) => {
+          finalAmounts[transfer.from] -= transfer.totalCost;
+          finalAmounts[transfer.to] += transfer.amount;
+          totalFee += transfer.fee;
+        });
+
+        const values = Object.values(finalAmounts);
+        const minValue = Math.min(...values);
+        const maxValue = Math.max(...values);
+        const diff = maxValue - minValue;
+
+        const simulation = {
+          transfers,
+          finalAmounts,
+          totalFee,
+          diff,
+          minimum: minValue
+        };
+
+        if (
+          !bestResult ||
+          simulation.diff < bestResult.diff ||
+          (simulation.diff === bestResult.diff && simulation.minimum > bestResult.minimum)
+        ) {
+          bestResult = simulation;
+        }
+      }
+
+      renderResult({
+        total,
+        target: bestResult?.minimum ?? average,
+        transfers: bestResult?.transfers ?? [],
+        finalAmounts: bestResult?.finalAmounts ?? originalAmounts,
+        totalFee: bestResult?.totalFee ?? 0
+      });
+
+      persistLocalDraft();
+    }
+
+    function initializeAds() {
+      const adsClient = String(siteConfig.adsenseClient || "").trim();
+      if (!adsClient || adsClient.includes("XXXXXXXXXXXXXXXX")) {
+        return;
+      }
+
+      document.querySelectorAll(".adsbygoogle").forEach((adElement) => {
+        adElement.setAttribute("data-ad-client", adsClient);
+        try {
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+        } catch (error) {
+          console.error("AdSense 초기화 실패", error);
+        }
+      });
+    }
+
+    async function init() {
+      restoreLocalDraft();
+      await initializeFirebase();
+      await loadSharedData();
+
+      if (currentCode) {
+        document.getElementById("shareCode").value = currentCode;
+      }
+
+      renderMembers();
+      renderItems();
+      calculate();
+      initializeAds();
+    }
+
+    init();
+  </script>
+</body>
+</html>
