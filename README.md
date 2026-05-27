@@ -15,6 +15,7 @@
 
 ## 추가 설정이 필요한 항목
 
-- 실제 사이트 주소로 `example.com` 교체
+- 현재 기본 사이트 주소는 `https://maple-raid-calculator.vercel.app/`
+- 커스텀 도메인을 연결하면 해당 주소로 다시 교체
 - Firebase 설정값 입력 시 공유 기능 활성화
 - Google AdSense 퍼블리셔 ID 및 광고 슬롯 ID 입력

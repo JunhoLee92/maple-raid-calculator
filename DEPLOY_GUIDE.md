@@ -27,7 +27,8 @@
 - `https://raidcalc.kr`
 - `https://maple-settlement.com`
 
-도메인을 연결한 뒤 `index.html` 안의 아래 값을 실제 주소로 바꾸세요.
+현재 기본 주소는 `https://maple-raid-calculator.vercel.app/`로 설정해 두었습니다.
+나중에 커스텀 도메인을 연결한 뒤 `index.html` 안의 아래 값을 새 주소로 바꾸세요.
 
 - `window.SITE_CONFIG.siteUrl`
 - `<meta property="og:url" ...>`
@@ -49,7 +50,7 @@
 
 ```html
 window.SITE_CONFIG = {
-  siteUrl: "https://example.com/",
+  siteUrl: "https://maple-raid-calculator.vercel.app/",
   adsenseClient: "ca-pub-XXXXXXXXXXXXXXXX",
   firebase: {
     apiKey: "YOUR_API_KEY",
