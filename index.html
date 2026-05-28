@@ -208,6 +208,24 @@
           </label>
         </div>
 
+        <div class="mb-4 grid gap-3 rounded-[1.5rem] bg-amber-50 p-4 md:grid-cols-[1fr_220px]">
+          <div class="text-sm leading-6 text-slate-700">
+            `내판`을 체크하면 경매장 판매가는 최저가 기준으로 사용되고, `실수령액`은 내판 구매가로 자동 계산됩니다.
+            판매가를 비워두면 실수령액 칸에 내판 구매가를 직접 입력할 수 있습니다.
+          </div>
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">내판 할인율(%)</span>
+            <input
+              id="internalSaleDiscountRate"
+              type="number"
+              min="0"
+              max="100"
+              value="15"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+            />
+          </label>
+        </div>
+
         <div class="overflow-x-auto">
           <table class="min-w-full border-separate border-spacing-y-2">
             <thead>
@@ -259,13 +277,24 @@
     const localStorageKey = "maple-raid-calculator-draft";
     const defaultMembers = ["갑", "을", "병", "정"].map((name) => ({ name, useSupport: false }));
     const auctionFeeRate = 0.1;
-    const defaultItems = [{ name: "", salePrice: 0, receivedPrice: 0, owner: "갑", useScissors: false, isSold: false }];
+    const defaultInternalSaleDiscountRate = 15;
+    const defaultItems = [{
+      name: "",
+      salePrice: 0,
+      receivedPrice: 0,
+      owner: "갑",
+      useScissors: false,
+      isSold: false,
+      isInternalSale: false,
+      internalBuyer: "갑"
+    }];
     const validFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
 
     let members = structuredClone(defaultMembers);
     let items = structuredClone(defaultItems);
     let scissorsPrice = 0;
     let supportAmount = 0;
+    let internalSaleDiscountRate = defaultInternalSaleDiscountRate;
     let currentCode = "";
     let db = null;
     let firebaseReady = false;
@@ -302,6 +331,7 @@
           items,
           scissorsPrice,
           supportAmount,
+          internalSaleDiscountRate,
           currentCode
         })
       );
@@ -322,6 +352,7 @@
           : structuredClone(defaultItems);
         scissorsPrice = Number(draft.scissorsPrice || 0);
         supportAmount = Number(draft.supportAmount || 0);
+        internalSaleDiscountRate = Number(draft.internalSaleDiscountRate || defaultInternalSaleDiscountRate);
         currentCode = typeof draft.currentCode === "string" ? draft.currentCode : "";
       } catch (error) {
         console.error("로컬 초안 복원 실패", error);
@@ -364,6 +395,7 @@
           items,
           scissorsPrice,
           supportAmount,
+          internalSaleDiscountRate,
           updatedAt: Date.now()
         }
       );
@@ -399,6 +431,7 @@
         : structuredClone(defaultItems);
       scissorsPrice = Number(data.scissorsPrice || 0);
       supportAmount = Number(data.supportAmount || 0);
+      internalSaleDiscountRate = Number(data.internalSaleDiscountRate || defaultInternalSaleDiscountRate);
       setSyncStatus("공유 데이터 불러오기 완료");
     }
 
@@ -413,7 +446,9 @@
         receivedPrice: Number(item?.receivedPrice ?? item?.price ?? 0),
         owner: String(item?.owner || fallbackOwner),
         useScissors: Boolean(item?.useScissors),
-        isSold: Boolean(item?.isSold)
+        isSold: Boolean(item?.isSold),
+        isInternalSale: Boolean(item?.isInternalSale),
+        internalBuyer: String(item?.internalBuyer || fallbackOwner)
       };
     }
 
@@ -421,10 +456,16 @@
       return Math.floor(Number(salePrice || 0) * (1 - auctionFeeRate));
     }
 
+    function getInternalSalePriceFromMarket(salePrice) {
+      return Math.floor(Number(salePrice || 0) * (1 - (internalSaleDiscountRate / 100)));
+    }
+
     function getBaseReceivedAmount(item) {
       const salePrice = Number(item.salePrice || 0);
       if (salePrice > 0) {
-        return getReceivedAmountFromSale(salePrice);
+        return item.isInternalSale
+          ? getInternalSalePriceFromMarket(salePrice)
+          : getReceivedAmountFromSale(salePrice);
       }
       return Number(item.receivedPrice || 0);
     }
@@ -467,7 +508,8 @@
       const memberNames = members.map((member) => member.name);
       items = items.map((item) => ({
         ...normalizeItem(item, memberNames[0]),
-        owner: memberNames.includes(item.owner) ? item.owner : memberNames[0]
+        owner: memberNames.includes(item.owner) ? item.owner : memberNames[0],
+        internalBuyer: memberNames.includes(item.internalBuyer) ? item.internalBuyer : memberNames[0]
       }));
     }
 
@@ -534,7 +576,9 @@
         receivedPrice: 0,
         owner: members[0].name,
         useScissors: false,
-        isSold: false
+        isSold: false,
+        isInternalSale: false,
+        internalBuyer: members[0].name
       });
       renderItems();
       calculate();
@@ -616,18 +660,24 @@
           (item, index) => {
             const salePrice = Number(item.salePrice || 0);
             const receivedPrice = salePrice > 0
-              ? getReceivedAmountFromSale(salePrice)
+              ? item.isInternalSale
+                ? getInternalSalePriceFromMarket(salePrice)
+                : getReceivedAmountFromSale(salePrice)
               : Number(item.receivedPrice || 0);
             const soldRowClass = item.isSold ? "bg-emerald-50/80 ring-1 ring-emerald-200" : "bg-slate-50";
             const soldInputClass = item.isSold ? "line-through text-slate-400" : "";
             const soldBadge = item.isSold
               ? '<div class="mb-2 inline-flex rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">판매완료</div>'
               : "";
+            const internalSaleBadge = item.isInternalSale
+              ? '<div class="mb-2 mr-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">내판</div>'
+              : "";
+            const receivedPlaceholderText = item.isInternalSale ? "내판 구매가" : "실수령액";
 
             return `
             <tr class="rounded-2xl ${soldRowClass}">
               <td class="px-3 py-2">
-                ${soldBadge}
+                ${internalSaleBadge}${soldBadge}
                 <input
                   type="text"
                   value="${item.name}"
@@ -651,6 +701,7 @@
                   value="${receivedPrice}"
                   class="item-received-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${salePrice > 0 ? "bg-slate-100 text-slate-500" : ""} ${soldInputClass}"
                   data-index="${index}"
+                  placeholder="${receivedPlaceholderText}"
                   ${salePrice > 0 ? "readonly" : ""}
                 />
               </td>
@@ -663,7 +714,7 @@
                 </select>
               </td>
               <td class="px-3 py-2">
-                <div class="flex min-w-[220px] flex-wrap items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3">
+                <div class="flex min-w-[260px] flex-wrap items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3">
                   <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
                     <input
                       type="checkbox"
@@ -676,12 +727,32 @@
                   <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
                     <input
                       type="checkbox"
+                      class="item-internal-sale h-4 w-4 rounded border-slate-300"
+                      data-index="${index}"
+                      ${item.isInternalSale ? "checked" : ""}
+                    />
+                    내판
+                  </label>
+                  <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
                       class="item-is-sold h-4 w-4 rounded border-slate-300"
                       data-index="${index}"
                       ${item.isSold ? "checked" : ""}
                     />
                     판매완료
                   </label>
+                  ${item.isInternalSale ? `
+                    <div class="w-full">
+                      <div class="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">내판 구매자</div>
+                      <select
+                        class="item-internal-buyer w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-900"
+                        data-index="${index}"
+                      >
+                        ${options}
+                      </select>
+                    </div>
+                  ` : ""}
                 </div>
               </td>
               <td class="px-3 py-2">
@@ -704,6 +775,11 @@
         select.value = items[index].owner;
       });
 
+      document.querySelectorAll(".item-internal-buyer").forEach((select) => {
+        const index = Number(select.dataset.index);
+        select.value = items[index].internalBuyer;
+      });
+
       document.querySelectorAll(".item-name").forEach((input) => {
         input.addEventListener("change", function onItemNameChange() {
           items[Number(this.dataset.index)].name = this.value;
@@ -717,7 +793,9 @@
           const salePrice = Number(this.value || 0);
           items[index].salePrice = salePrice;
           if (salePrice > 0) {
-            items[index].receivedPrice = getReceivedAmountFromSale(salePrice);
+            items[index].receivedPrice = items[index].isInternalSale
+              ? getInternalSalePriceFromMarket(salePrice)
+              : getReceivedAmountFromSale(salePrice);
           }
           renderItems();
           calculate();
@@ -745,11 +823,35 @@
         });
       });
 
+      document.querySelectorAll(".item-internal-sale").forEach((checkbox) => {
+        checkbox.addEventListener("change", function onItemInternalSaleChange() {
+          const index = Number(this.dataset.index);
+          items[index].isInternalSale = this.checked;
+          if (!items[index].internalBuyer) {
+            items[index].internalBuyer = members[0]?.name || defaultMembers[0].name;
+          }
+          if (Number(items[index].salePrice || 0) > 0) {
+            items[index].receivedPrice = this.checked
+              ? getInternalSalePriceFromMarket(items[index].salePrice)
+              : getReceivedAmountFromSale(items[index].salePrice);
+          }
+          renderItems();
+          calculate();
+        });
+      });
+
       document.querySelectorAll(".item-is-sold").forEach((checkbox) => {
         checkbox.addEventListener("change", function onItemSoldChange() {
           items[Number(this.dataset.index)].isSold = this.checked;
           renderItems();
           persistLocalDraft();
+        });
+      });
+
+      document.querySelectorAll(".item-internal-buyer").forEach((select) => {
+        select.addEventListener("change", function onItemInternalBuyerChange() {
+          items[Number(this.dataset.index)].internalBuyer = this.value;
+          calculate();
         });
       });
     }
@@ -760,6 +862,10 @@
           <div class="text-sm text-slate-500">총 정산 반영 금액</div>
           <div class="mt-2 text-3xl font-black">${format(result.total)}</div>
         </div>
+        <div class="rounded-[1.5rem] bg-amber-50 p-5">
+          <div class="text-sm text-slate-500">총 내판 반영 금액</div>
+          <div class="mt-2 text-3xl font-black text-amber-700">${format(result.internalSaleTotal)}</div>
+        </div>
         <div class="rounded-[1.5rem] bg-blue-50 p-5">
           <div class="text-sm text-slate-500">기본 목표액</div>
           <div class="mt-2 text-3xl font-black text-blue-700">${format(result.target)}</div>
@@ -767,10 +873,6 @@
         <div class="rounded-[1.5rem] bg-rose-50 p-5">
           <div class="text-sm text-slate-500">총 누진 수수료 예상</div>
           <div class="mt-2 text-3xl font-black text-rose-600">${format(result.totalFee)}</div>
-        </div>
-        <div class="rounded-[1.5rem] bg-emerald-50 p-5">
-          <div class="text-sm text-slate-500">파티원 수</div>
-          <div class="mt-2 text-3xl font-black text-emerald-600">${members.length}</div>
         </div>
       `;
 
@@ -806,17 +908,28 @@
 
       const originalAmounts = Object.fromEntries(members.map((member) => [member.name, 0]));
       let total = 0;
+      let internalSaleTotal = 0;
 
       items.forEach((item) => {
-        const owner = originalAmounts[item.owner] !== undefined ? item.owner : members[0].name;
+        const fallbackName = members[0]?.name || defaultMembers[0].name;
+        const owner = originalAmounts[item.owner] !== undefined ? item.owner : fallbackName;
+        const buyer = originalAmounts[item.internalBuyer] !== undefined ? item.internalBuyer : fallbackName;
         const price = getAdjustedItemPrice(item);
-        originalAmounts[owner] += price;
+
+        if (item.isInternalSale) {
+          originalAmounts[buyer] += price;
+          internalSaleTotal += price;
+        } else {
+          originalAmounts[owner] += price;
+        }
+
         total += price;
       });
 
       if (!members.length) {
         renderResult({
           total: 0,
+          internalSaleTotal: 0,
           target: 0,
           transfers: [],
           finalAmounts: {},
@@ -961,6 +1074,7 @@
 
       renderResult({
         total,
+        internalSaleTotal,
         target: bestResult?.baseTarget ?? average,
         transfers: bestResult?.transfers ?? [],
         finalAmounts: bestResult?.finalAmounts ?? originalAmounts,
@@ -998,6 +1112,13 @@
       document.getElementById("scissorsPrice").value = scissorsPrice;
       document.getElementById("scissorsPrice").addEventListener("change", function onScissorsPriceChange() {
         scissorsPrice = Number(this.value || 0);
+        calculate();
+      });
+      document.getElementById("internalSaleDiscountRate").value = internalSaleDiscountRate;
+      document.getElementById("internalSaleDiscountRate").addEventListener("change", function onInternalSaleDiscountRateChange() {
+        internalSaleDiscountRate = Math.min(Math.max(Number(this.value || 0), 0), 100);
+        this.value = internalSaleDiscountRate;
+        renderItems();
         calculate();
       });
       document.getElementById("supportAmount").value = supportAmount;
