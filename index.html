@@ -141,6 +141,21 @@
             + 파티원 추가
           </button>
         </div>
+        <div class="mb-4 grid gap-3 rounded-[1.5rem] bg-slate-50 p-4 md:grid-cols-[1fr_220px]">
+          <div class="text-sm leading-6 text-slate-600">
+            `지원금`이 체크된 파티원은 입력한 지원금만큼 더 받고, 나머지 파티원이 그 금액을 균등하게 분담합니다.
+          </div>
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">지원금 금액</span>
+            <input
+              id="supportAmount"
+              type="number"
+              min="0"
+              value="0"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+            />
+          </label>
+        </div>
         <div id="members" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"></div>
       </section>
 
@@ -256,7 +271,7 @@
   <script type="module">
     const siteConfig = window.SITE_CONFIG || {};
     const localStorageKey = "maple-raid-calculator-draft";
-    const defaultMembers = ["갑", "을", "병", "정"].map((name) => ({ name }));
+    const defaultMembers = ["갑", "을", "병", "정"].map((name) => ({ name, useSupport: false }));
     const auctionFeeRate = 0.1;
     const defaultItems = [{ name: "", salePrice: 0, receivedPrice: 0, owner: "갑", useScissors: false }];
     const validFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
@@ -264,6 +279,7 @@
     let members = structuredClone(defaultMembers);
     let items = structuredClone(defaultItems);
     let scissorsPrice = 0;
+    let supportAmount = 0;
     let currentCode = "";
     let db = null;
     let firebaseReady = false;
@@ -299,6 +315,7 @@
           members,
           items,
           scissorsPrice,
+          supportAmount,
           currentCode
         })
       );
@@ -310,10 +327,15 @@
         if (!raw) return;
         const draft = JSON.parse(raw);
         members = Array.isArray(draft.members) && draft.members.length ? draft.members : structuredClone(defaultMembers);
+        members = members.map((member) => ({
+          name: String(member.name || ""),
+          useSupport: Boolean(member.useSupport)
+        }));
         items = Array.isArray(draft.items) && draft.items.length
           ? draft.items.map((item) => normalizeItem(item))
           : structuredClone(defaultItems);
         scissorsPrice = Number(draft.scissorsPrice || 0);
+        supportAmount = Number(draft.supportAmount || 0);
         currentCode = typeof draft.currentCode === "string" ? draft.currentCode : "";
       } catch (error) {
         console.error("로컬 초안 복원 실패", error);
@@ -355,6 +377,7 @@
           members,
           items,
           scissorsPrice,
+          supportAmount,
           updatedAt: Date.now()
         }
       );
@@ -381,10 +404,15 @@
 
       const data = snapshot.data();
       members = Array.isArray(data.members) && data.members.length ? data.members : structuredClone(defaultMembers);
+      members = members.map((member) => ({
+        name: String(member.name || ""),
+        useSupport: Boolean(member.useSupport)
+      }));
       items = Array.isArray(data.items) && data.items.length
         ? data.items.map((item) => normalizeItem(item))
         : structuredClone(defaultItems);
       scissorsPrice = Number(data.scissorsPrice || 0);
+      supportAmount = Number(data.supportAmount || 0);
       setSyncStatus("공유 데이터 불러오기 완료");
     }
 
@@ -440,7 +468,8 @@
     function normalizeMembers() {
       members = members
         .map((member, index) => ({
-          name: String(member.name || "").trim() || `파티원${index + 1}`
+          name: String(member.name || "").trim() || `파티원${index + 1}`,
+          useSupport: Boolean(member.useSupport)
         }))
         .filter((member, index, array) => array.findIndex((target) => target.name === member.name) === index);
 
@@ -495,7 +524,7 @@
     };
 
     window.addMember = function addMember() {
-      members.push({ name: `파티원${members.length + 1}` });
+      members.push({ name: `파티원${members.length + 1}`, useSupport: false });
       normalizeMembers();
       renderMembers();
       renderItems();
@@ -546,6 +575,15 @@
                   class="member-input w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
                   data-index="${index}"
                 />
+                <label class="inline-flex shrink-0 items-center gap-2 rounded-2xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    class="member-support h-4 w-4 rounded border-slate-300"
+                    data-index="${index}"
+                    ${member.useSupport ? "checked" : ""}
+                  />
+                  지원금
+                </label>
                 <button
                   type="button"
                   onclick="removeMember(${index})"
@@ -566,6 +604,14 @@
           normalizeMembers();
           renderMembers();
           renderItems();
+          calculate();
+        });
+      });
+
+      document.querySelectorAll(".member-support").forEach((checkbox) => {
+        checkbox.addEventListener("change", function onMemberSupportChange() {
+          const index = Number(this.dataset.index);
+          members[index].useSupport = this.checked;
           calculate();
         });
       });
@@ -704,7 +750,7 @@
           <div class="mt-2 text-3xl font-black">${format(result.total)}</div>
         </div>
         <div class="rounded-[1.5rem] bg-blue-50 p-5">
-          <div class="text-sm text-slate-500">목표 실수령액</div>
+          <div class="text-sm text-slate-500">기본 목표액</div>
           <div class="mt-2 text-3xl font-black text-blue-700">${format(result.target)}</div>
         </div>
         <div class="rounded-[1.5rem] bg-rose-50 p-5">
@@ -769,17 +815,39 @@
       }
 
       const average = Math.floor(total / members.length);
+      const supportedMembers = members.filter((member) => member.useSupport);
+      const activeSupportAmount = Math.max(Number(supportAmount || 0), 0);
+      const desiredBaseTargets = {};
+      const unsupportedCount = members.length - supportedMembers.length;
+
+      if (supportedMembers.length > 0 && unsupportedCount > 0 && activeSupportAmount > 0) {
+        const deductionPerUnsupported = (activeSupportAmount * supportedMembers.length) / unsupportedCount;
+        members.forEach((member) => {
+          desiredBaseTargets[member.name] = member.useSupport
+            ? average + activeSupportAmount
+            : average - deductionPerUnsupported;
+        });
+      } else {
+        members.forEach((member) => {
+          desiredBaseTargets[member.name] = average;
+        });
+      }
+
       let bestResult = null;
 
-      for (let target = average - 3000000; target <= average + 3000000; target += 1000) {
+      for (let offset = -3000000; offset <= 3000000; offset += 1000) {
+        const targetMap = Object.fromEntries(
+          Object.entries(desiredBaseTargets).map(([name, target]) => [name, target + offset])
+        );
         const senders = [];
         const receivers = [];
 
         Object.entries(originalAmounts).forEach(([name, amount]) => {
-          if (amount > target) {
-            senders.push({ name, remaining: amount - target });
-          } else if (amount < target) {
-            receivers.push({ name, needed: target - amount });
+          const targetAmount = targetMap[name];
+          if (amount > targetAmount) {
+            senders.push({ name, remaining: amount - targetAmount });
+          } else if (amount < targetAmount) {
+            receivers.push({ name, needed: targetAmount - amount });
           }
         });
 
@@ -842,19 +910,39 @@
         const minValue = Math.min(...values);
         const maxValue = Math.max(...values);
         const diff = maxValue - minValue;
+        const deviations = members.map((member) => Math.abs(finalAmounts[member.name] - targetMap[member.name]));
+        const maxDeviation = Math.max(...deviations);
+        const totalDeviation = deviations.reduce((sum, value) => sum + value, 0);
 
         const simulation = {
+          baseTarget: average + offset,
           transfers,
           finalAmounts,
           totalFee,
           diff,
-          minimum: minValue
+          minimum: minValue,
+          maxDeviation,
+          totalDeviation
         };
 
         if (
           !bestResult ||
-          simulation.diff < bestResult.diff ||
-          (simulation.diff === bestResult.diff && simulation.minimum > bestResult.minimum)
+          simulation.maxDeviation < bestResult.maxDeviation ||
+          (
+            simulation.maxDeviation === bestResult.maxDeviation &&
+            simulation.totalDeviation < bestResult.totalDeviation
+          ) ||
+          (
+            simulation.maxDeviation === bestResult.maxDeviation &&
+            simulation.totalDeviation === bestResult.totalDeviation &&
+            simulation.diff < bestResult.diff
+          ) ||
+          (
+            simulation.maxDeviation === bestResult.maxDeviation &&
+            simulation.totalDeviation === bestResult.totalDeviation &&
+            simulation.diff === bestResult.diff &&
+            simulation.minimum > bestResult.minimum
+          )
         ) {
           bestResult = simulation;
         }
@@ -862,7 +950,7 @@
 
       renderResult({
         total,
-        target: bestResult?.minimum ?? average,
+        target: bestResult?.baseTarget ?? average,
         transfers: bestResult?.transfers ?? [],
         finalAmounts: bestResult?.finalAmounts ?? originalAmounts,
         totalFee: bestResult?.totalFee ?? 0
@@ -899,6 +987,11 @@
       document.getElementById("scissorsPrice").value = scissorsPrice;
       document.getElementById("scissorsPrice").addEventListener("change", function onScissorsPriceChange() {
         scissorsPrice = Number(this.value || 0);
+        calculate();
+      });
+      document.getElementById("supportAmount").value = supportAmount;
+      document.getElementById("supportAmount").addEventListener("change", function onSupportAmountChange() {
+        supportAmount = Number(this.value || 0);
         calculate();
       });
 
