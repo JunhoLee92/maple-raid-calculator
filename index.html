@@ -273,7 +273,7 @@
     const localStorageKey = "maple-raid-calculator-draft";
     const defaultMembers = ["갑", "을", "병", "정"].map((name) => ({ name, useSupport: false }));
     const auctionFeeRate = 0.1;
-    const defaultItems = [{ name: "", salePrice: 0, receivedPrice: 0, owner: "갑", useScissors: false }];
+    const defaultItems = [{ name: "", salePrice: 0, receivedPrice: 0, owner: "갑", useScissors: false, isSold: false }];
     const validFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
 
     let members = structuredClone(defaultMembers);
@@ -426,7 +426,8 @@
         salePrice: Number(item?.salePrice || 0),
         receivedPrice: Number(item?.receivedPrice ?? item?.price ?? 0),
         owner: String(item?.owner || fallbackOwner),
-        useScissors: Boolean(item?.useScissors)
+        useScissors: Boolean(item?.useScissors),
+        isSold: Boolean(item?.isSold)
       };
     }
 
@@ -546,7 +547,8 @@
         salePrice: 0,
         receivedPrice: 0,
         owner: members[0].name,
-        useScissors: false
+        useScissors: false,
+        isSold: false
       });
       renderItems();
       calculate();
@@ -630,14 +632,20 @@
             const receivedPrice = salePrice > 0
               ? getReceivedAmountFromSale(salePrice)
               : Number(item.receivedPrice || 0);
+            const soldRowClass = item.isSold ? "bg-emerald-50/80 ring-1 ring-emerald-200" : "bg-slate-50";
+            const soldInputClass = item.isSold ? "line-through text-slate-400" : "";
+            const soldBadge = item.isSold
+              ? '<div class="mb-2 inline-flex rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">판매완료</div>'
+              : "";
 
             return `
-            <tr class="rounded-2xl bg-slate-50">
+            <tr class="rounded-2xl ${soldRowClass}">
               <td class="px-3 py-2">
+                ${soldBadge}
                 <input
                   type="text"
                   value="${item.name}"
-                  class="item-name w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                  class="item-name w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${soldInputClass}"
                   data-index="${index}"
                 />
               </td>
@@ -646,7 +654,7 @@
                   type="number"
                   min="0"
                   value="${salePrice}"
-                  class="item-sale-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                  class="item-sale-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${soldInputClass}"
                   data-index="${index}"
                 />
               </td>
@@ -655,7 +663,7 @@
                   type="number"
                   min="0"
                   value="${receivedPrice}"
-                  class="item-received-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${salePrice > 0 ? "bg-slate-100 text-slate-500" : ""}"
+                  class="item-received-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${salePrice > 0 ? "bg-slate-100 text-slate-500" : ""} ${soldInputClass}"
                   data-index="${index}"
                   ${salePrice > 0 ? "readonly" : ""}
                 />
@@ -669,7 +677,7 @@
                 </select>
               </td>
               <td class="px-3 py-2">
-                <div class="flex min-w-[140px] items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3">
+                <div class="flex min-w-[220px] flex-wrap items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3">
                   <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
                     <input
                       type="checkbox"
@@ -678,6 +686,15 @@
                       ${item.useScissors ? "checked" : ""}
                     />
                     가위
+                  </label>
+                  <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      class="item-is-sold h-4 w-4 rounded border-slate-300"
+                      data-index="${index}"
+                      ${item.isSold ? "checked" : ""}
+                    />
+                    판매완료
                   </label>
                 </div>
               </td>
@@ -739,6 +756,14 @@
         checkbox.addEventListener("change", function onItemScissorsChange() {
           items[Number(this.dataset.index)].useScissors = this.checked;
           calculate();
+        });
+      });
+
+      document.querySelectorAll(".item-is-sold").forEach((checkbox) => {
+        checkbox.addEventListener("change", function onItemSoldChange() {
+          items[Number(this.dataset.index)].isSold = this.checked;
+          renderItems();
+          persistLocalDraft();
         });
       });
     }
