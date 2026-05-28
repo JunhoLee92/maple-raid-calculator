@@ -525,6 +525,17 @@
       return Math.max(basePrice - scissorsPrice, 0);
     }
 
+    function focusItemField(index, fieldClass) {
+      requestAnimationFrame(() => {
+        const target = document.querySelector(`.${fieldClass}[data-index="${index}"]`);
+        if (!target) return;
+        target.focus();
+        if (typeof target.select === "function") {
+          target.select();
+        }
+      });
+    }
+
     window.generateShareCode = async function generateShareCode() {
       currentCode = generateRandomCode();
       document.getElementById("shareCode").value = currentCode;
@@ -894,6 +905,11 @@
           items[Number(this.dataset.index)].name = this.value;
           persistLocalDraft();
         });
+        input.addEventListener("keydown", function onItemNameKeydown(event) {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          focusItemField(Number(this.dataset.index), "item-sale-price");
+        });
       });
 
       document.querySelectorAll(".item-sale-price").forEach((input) => {
@@ -908,6 +924,20 @@
           }
           renderItems();
           calculate();
+        });
+        input.addEventListener("keydown", function onItemSalePriceKeydown(event) {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          const index = Number(this.dataset.index);
+          const isLastItem = index === items.length - 1;
+
+          if (isLastItem) {
+            window.addItem();
+            focusItemField(items.length - 1, "item-name");
+            return;
+          }
+
+          focusItemField(index + 1, "item-name");
         });
       });
 
