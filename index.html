@@ -159,6 +159,22 @@
           </button>
         </div>
 
+        <div class="mb-4 grid gap-3 rounded-[1.5rem] bg-slate-50 p-4 md:grid-cols-[1fr_220px]">
+          <div class="text-sm leading-6 text-slate-600">
+            `가위`가 체크된 아이템은 입력 가격에서 카르마의 가위 가격을 자동으로 차감합니다.
+          </div>
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">카르마의 가위 가격</span>
+            <input
+              id="scissorsPrice"
+              type="number"
+              min="0"
+              value="0"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+            />
+          </label>
+        </div>
+
         <div class="overflow-x-auto">
           <table class="min-w-full border-separate border-spacing-y-2">
             <thead>
@@ -166,6 +182,7 @@
                 <th class="px-3 py-2">아이템명</th>
                 <th class="px-3 py-2">가격</th>
                 <th class="px-3 py-2">획득자</th>
+                <th class="px-3 py-2">옵션</th>
                 <th class="px-3 py-2">삭제</th>
               </tr>
             </thead>
@@ -239,11 +256,12 @@
     const siteConfig = window.SITE_CONFIG || {};
     const localStorageKey = "maple-raid-calculator-draft";
     const defaultMembers = ["갑", "을", "병", "정"].map((name) => ({ name }));
-    const defaultItems = [{ name: "", price: 0, owner: "갑" }];
+    const defaultItems = [{ name: "", price: 0, owner: "갑", useScissors: false }];
     const validFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
 
     let members = structuredClone(defaultMembers);
     let items = structuredClone(defaultItems);
+    let scissorsPrice = 0;
     let currentCode = "";
     let db = null;
     let firebaseReady = false;
@@ -278,6 +296,7 @@
         JSON.stringify({
           members,
           items,
+          scissorsPrice,
           currentCode
         })
       );
@@ -290,6 +309,11 @@
         const draft = JSON.parse(raw);
         members = Array.isArray(draft.members) && draft.members.length ? draft.members : structuredClone(defaultMembers);
         items = Array.isArray(draft.items) && draft.items.length ? draft.items : structuredClone(defaultItems);
+        items = items.map((item) => ({
+          ...item,
+          useScissors: Boolean(item.useScissors)
+        }));
+        scissorsPrice = Number(draft.scissorsPrice || 0);
         currentCode = typeof draft.currentCode === "string" ? draft.currentCode : "";
       } catch (error) {
         console.error("로컬 초안 복원 실패", error);
@@ -330,6 +354,7 @@
         {
           members,
           items,
+          scissorsPrice,
           updatedAt: Date.now()
         }
       );
@@ -357,6 +382,11 @@
       const data = snapshot.data();
       members = Array.isArray(data.members) && data.members.length ? data.members : structuredClone(defaultMembers);
       items = Array.isArray(data.items) && data.items.length ? data.items : structuredClone(defaultItems);
+      items = items.map((item) => ({
+        ...item,
+        useScissors: Boolean(item.useScissors)
+      }));
+      scissorsPrice = Number(data.scissorsPrice || 0);
       setSyncStatus("공유 데이터 불러오기 완료");
     }
 
@@ -401,8 +431,15 @@
       const memberNames = members.map((member) => member.name);
       items = items.map((item) => ({
         ...item,
-        owner: memberNames.includes(item.owner) ? item.owner : memberNames[0]
+        owner: memberNames.includes(item.owner) ? item.owner : memberNames[0],
+        useScissors: Boolean(item.useScissors)
       }));
+    }
+
+    function getAdjustedItemPrice(item) {
+      const basePrice = Number(item.price || 0);
+      if (!item.useScissors) return basePrice;
+      return Math.max(basePrice - scissorsPrice, 0);
     }
 
     window.generateShareCode = async function generateShareCode() {
@@ -459,7 +496,8 @@
       items.push({
         name: "",
         price: 0,
-        owner: members[0].name
+        owner: members[0].name,
+        useScissors: false
       });
       renderItems();
       calculate();
@@ -549,6 +587,19 @@
                 </select>
               </td>
               <td class="px-3 py-2">
+                <div class="flex min-w-[140px] items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3">
+                  <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      class="item-use-scissors h-4 w-4 rounded border-slate-300"
+                      data-index="${index}"
+                      ${item.useScissors ? "checked" : ""}
+                    />
+                    가위
+                  </label>
+                </div>
+              </td>
+              <td class="px-3 py-2">
                 <button
                   type="button"
                   onclick="removeItem(${index})"
@@ -584,6 +635,13 @@
       document.querySelectorAll(".item-owner").forEach((select) => {
         select.addEventListener("change", function onItemOwnerChange() {
           items[Number(this.dataset.index)].owner = this.value;
+          calculate();
+        });
+      });
+
+      document.querySelectorAll(".item-use-scissors").forEach((checkbox) => {
+        checkbox.addEventListener("change", function onItemScissorsChange() {
+          items[Number(this.dataset.index)].useScissors = this.checked;
           calculate();
         });
       });
@@ -644,7 +702,7 @@
 
       items.forEach((item) => {
         const owner = originalAmounts[item.owner] !== undefined ? item.owner : members[0].name;
-        const price = Number(item.price || 0);
+        const price = getAdjustedItemPrice(item);
         originalAmounts[owner] += price;
         total += price;
       });
@@ -787,6 +845,12 @@
       if (currentCode) {
         document.getElementById("shareCode").value = currentCode;
       }
+
+      document.getElementById("scissorsPrice").value = scissorsPrice;
+      document.getElementById("scissorsPrice").addEventListener("change", function onScissorsPriceChange() {
+        scissorsPrice = Number(this.value || 0);
+        calculate();
+      });
 
       renderMembers();
       renderItems();
