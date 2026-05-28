@@ -51,7 +51,7 @@
             메이플 레이드 정산기
           </h1>
           <p class="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-            드랍템 가격, 획득자, 파티원을 입력하면 실수령액과 송금 경로를 계산합니다.
+            드랍템 판매가, 실수령액, 획득자를 입력하면 실수령액과 송금 경로를 계산합니다.
             Firebase를 연결하면 공유 링크로 같은 데이터를 불러올 수 있고, 도메인을 연결하면 실제 사이트로 공개할 수 있습니다.
           </p>
           <div class="mt-6 flex flex-wrap gap-3">
@@ -148,7 +148,7 @@
         <div class="mb-4 flex items-center justify-between gap-3">
           <div>
             <h2 class="text-2xl font-black">드랍 아이템</h2>
-            <p class="mt-1 text-sm text-slate-600">아이템 가격과 획득자를 입력하세요.</p>
+            <p class="mt-1 text-sm text-slate-600">경매장 판매가 또는 실수령액과 획득자를 입력하세요.</p>
           </div>
           <button
             type="button"
@@ -161,7 +161,7 @@
 
         <div class="mb-4 grid gap-3 rounded-[1.5rem] bg-slate-50 p-4 md:grid-cols-[1fr_220px]">
           <div class="text-sm leading-6 text-slate-600">
-            `가위`가 체크된 아이템은 입력 가격에서 카르마의 가위 가격을 자동으로 차감합니다.
+            `가위`가 체크된 아이템은 실수령액에서 카르마의 가위 가격을 자동으로 차감합니다.
           </div>
           <label class="block">
             <span class="mb-2 block text-sm font-semibold text-slate-700">카르마의 가위 가격</span>
@@ -180,7 +180,8 @@
             <thead>
               <tr class="text-left text-sm text-slate-500">
                 <th class="px-3 py-2">아이템명</th>
-                <th class="px-3 py-2">가격</th>
+                <th class="px-3 py-2">경매장 판매가</th>
+                <th class="px-3 py-2">실수령액</th>
                 <th class="px-3 py-2">획득자</th>
                 <th class="px-3 py-2">옵션</th>
                 <th class="px-3 py-2">삭제</th>
@@ -256,7 +257,8 @@
     const siteConfig = window.SITE_CONFIG || {};
     const localStorageKey = "maple-raid-calculator-draft";
     const defaultMembers = ["갑", "을", "병", "정"].map((name) => ({ name }));
-    const defaultItems = [{ name: "", price: 0, owner: "갑", useScissors: false }];
+    const auctionFeeRate = 0.1;
+    const defaultItems = [{ name: "", salePrice: 0, receivedPrice: 0, owner: "갑", useScissors: false }];
     const validFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
 
     let members = structuredClone(defaultMembers);
@@ -308,11 +310,9 @@
         if (!raw) return;
         const draft = JSON.parse(raw);
         members = Array.isArray(draft.members) && draft.members.length ? draft.members : structuredClone(defaultMembers);
-        items = Array.isArray(draft.items) && draft.items.length ? draft.items : structuredClone(defaultItems);
-        items = items.map((item) => ({
-          ...item,
-          useScissors: Boolean(item.useScissors)
-        }));
+        items = Array.isArray(draft.items) && draft.items.length
+          ? draft.items.map((item) => normalizeItem(item))
+          : structuredClone(defaultItems);
         scissorsPrice = Number(draft.scissorsPrice || 0);
         currentCode = typeof draft.currentCode === "string" ? draft.currentCode : "";
       } catch (error) {
@@ -381,17 +381,37 @@
 
       const data = snapshot.data();
       members = Array.isArray(data.members) && data.members.length ? data.members : structuredClone(defaultMembers);
-      items = Array.isArray(data.items) && data.items.length ? data.items : structuredClone(defaultItems);
-      items = items.map((item) => ({
-        ...item,
-        useScissors: Boolean(item.useScissors)
-      }));
+      items = Array.isArray(data.items) && data.items.length
+        ? data.items.map((item) => normalizeItem(item))
+        : structuredClone(defaultItems);
       scissorsPrice = Number(data.scissorsPrice || 0);
       setSyncStatus("공유 데이터 불러오기 완료");
     }
 
     function format(number) {
       return Math.floor(Number(number) || 0).toLocaleString("ko-KR");
+    }
+
+    function normalizeItem(item, fallbackOwner = "갑") {
+      return {
+        name: String(item?.name || ""),
+        salePrice: Number(item?.salePrice || 0),
+        receivedPrice: Number(item?.receivedPrice ?? item?.price ?? 0),
+        owner: String(item?.owner || fallbackOwner),
+        useScissors: Boolean(item?.useScissors)
+      };
+    }
+
+    function getReceivedAmountFromSale(salePrice) {
+      return Math.floor(Number(salePrice || 0) * (1 - auctionFeeRate));
+    }
+
+    function getBaseReceivedAmount(item) {
+      const salePrice = Number(item.salePrice || 0);
+      if (salePrice > 0) {
+        return getReceivedAmountFromSale(salePrice);
+      }
+      return Number(item.receivedPrice || 0);
     }
 
     const feeBrackets = [
@@ -430,14 +450,13 @@
 
       const memberNames = members.map((member) => member.name);
       items = items.map((item) => ({
-        ...item,
-        owner: memberNames.includes(item.owner) ? item.owner : memberNames[0],
-        useScissors: Boolean(item.useScissors)
+        ...normalizeItem(item, memberNames[0]),
+        owner: memberNames.includes(item.owner) ? item.owner : memberNames[0]
       }));
     }
 
     function getAdjustedItemPrice(item) {
-      const basePrice = Number(item.price || 0);
+      const basePrice = getBaseReceivedAmount(item);
       if (!item.useScissors) return basePrice;
       return Math.max(basePrice - scissorsPrice, 0);
     }
@@ -495,7 +514,8 @@
       members = members.length ? members : structuredClone(defaultMembers);
       items.push({
         name: "",
-        price: 0,
+        salePrice: 0,
+        receivedPrice: 0,
         owner: members[0].name,
         useScissors: false
       });
@@ -559,7 +579,13 @@
 
       tbody.innerHTML = items
         .map(
-          (item, index) => `
+          (item, index) => {
+            const salePrice = Number(item.salePrice || 0);
+            const receivedPrice = salePrice > 0
+              ? getReceivedAmountFromSale(salePrice)
+              : Number(item.receivedPrice || 0);
+
+            return `
             <tr class="rounded-2xl bg-slate-50">
               <td class="px-3 py-2">
                 <input
@@ -573,9 +599,19 @@
                 <input
                   type="number"
                   min="0"
-                  value="${item.price}"
-                  class="item-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                  value="${salePrice}"
+                  class="item-sale-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
                   data-index="${index}"
+                />
+              </td>
+              <td class="px-3 py-2">
+                <input
+                  type="number"
+                  min="0"
+                  value="${receivedPrice}"
+                  class="item-received-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${salePrice > 0 ? "bg-slate-100 text-slate-500" : ""}"
+                  data-index="${index}"
+                  ${salePrice > 0 ? "readonly" : ""}
                 />
               </td>
               <td class="px-3 py-2">
@@ -609,7 +645,8 @@
                 </button>
               </td>
             </tr>
-          `
+          `;
+          }
         )
         .join("");
 
@@ -625,9 +662,22 @@
         });
       });
 
-      document.querySelectorAll(".item-price").forEach((input) => {
-        input.addEventListener("change", function onItemPriceChange() {
-          items[Number(this.dataset.index)].price = Number(this.value || 0);
+      document.querySelectorAll(".item-sale-price").forEach((input) => {
+        input.addEventListener("change", function onItemSalePriceChange() {
+          const index = Number(this.dataset.index);
+          const salePrice = Number(this.value || 0);
+          items[index].salePrice = salePrice;
+          if (salePrice > 0) {
+            items[index].receivedPrice = getReceivedAmountFromSale(salePrice);
+          }
+          renderItems();
+          calculate();
+        });
+      });
+
+      document.querySelectorAll(".item-received-price").forEach((input) => {
+        input.addEventListener("change", function onItemReceivedPriceChange() {
+          items[Number(this.dataset.index)].receivedPrice = Number(this.value || 0);
           calculate();
         });
       });
@@ -650,7 +700,7 @@
     function renderResult(result) {
       document.getElementById("summary").innerHTML = `
         <div class="rounded-[1.5rem] bg-slate-100 p-5">
-          <div class="text-sm text-slate-500">총 판매 금액</div>
+          <div class="text-sm text-slate-500">총 정산 반영 금액</div>
           <div class="mt-2 text-3xl font-black">${format(result.total)}</div>
         </div>
         <div class="rounded-[1.5rem] bg-blue-50 p-5">
