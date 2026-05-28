@@ -113,32 +113,32 @@
           </div>
         </div>
 
-        <div class="mt-5 grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
+        <div class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto_auto]">
           <input
             id="shareCode"
             type="text"
             readonly
             placeholder="공유 코드를 생성하세요"
-            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 sm:col-span-2 lg:col-span-1"
           />
           <button
             type="button"
             onclick="generateShareCode()"
-            class="rounded-2xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-700"
+            class="w-full rounded-2xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-700"
           >
             코드 생성
           </button>
           <button
             type="button"
             onclick="copyShareLink()"
-            class="rounded-2xl bg-emerald-500 px-5 py-3 font-bold text-white transition hover:bg-emerald-400"
+            class="w-full rounded-2xl bg-emerald-500 px-5 py-3 font-bold text-white transition hover:bg-emerald-400"
           >
             링크 복사
           </button>
           <button
             type="button"
             onclick="manualSave()"
-            class="rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white transition hover:bg-blue-500"
+            class="w-full rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white transition hover:bg-blue-500 sm:col-span-2 lg:col-span-1"
           >
             저장
           </button>
@@ -226,7 +226,9 @@
           </label>
         </div>
 
-        <div class="overflow-x-auto">
+        <div id="itemsCards" class="space-y-4 md:hidden"></div>
+
+        <div class="hidden overflow-x-auto md:block">
           <table class="min-w-full border-separate border-spacing-y-2">
             <thead>
               <tr class="text-left text-sm text-slate-500">
@@ -600,7 +602,7 @@
         .map(
           (member, index) => `
             <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-              <div class="flex gap-3">
+              <div class="flex flex-col gap-3 sm:flex-row">
                 <input
                   type="text"
                   value="${member.name}"
@@ -619,7 +621,7 @@
                 <button
                   type="button"
                   onclick="removeMember(${index})"
-                  class="rounded-2xl bg-rose-500 px-4 py-3 font-bold text-white transition hover:bg-rose-400"
+                  class="rounded-2xl bg-rose-500 px-4 py-3 font-bold text-white transition hover:bg-rose-400 sm:px-4"
                 >
                   삭제
                 </button>
@@ -651,33 +653,34 @@
 
     function renderItems() {
       const tbody = document.getElementById("itemsTable");
+      const cards = document.getElementById("itemsCards");
       const options = members
         .map((member) => `<option value="${member.name}">${member.name}</option>`)
         .join("");
 
-      tbody.innerHTML = items
-        .map(
-          (item, index) => {
-            const salePrice = Number(item.salePrice || 0);
-            const receivedPrice = salePrice > 0
-              ? item.isInternalSale
-                ? getInternalSalePriceFromMarket(salePrice)
-                : getReceivedAmountFromSale(salePrice)
-              : Number(item.receivedPrice || 0);
-            const soldRowClass = item.isSold ? "bg-emerald-50/80 ring-1 ring-emerald-200" : "bg-slate-50";
-            const soldInputClass = item.isSold ? "line-through text-slate-400" : "";
-            const soldBadge = item.isSold
-              ? '<div class="mb-2 inline-flex rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">판매완료</div>'
-              : "";
-            const internalSaleBadge = item.isInternalSale
-              ? '<div class="mb-2 mr-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">내판</div>'
-              : "";
-            const receivedPlaceholderText = item.isInternalSale ? "내판 구매가" : "실수령액";
+      const itemViews = items.map((item, index) => {
+        const salePrice = Number(item.salePrice || 0);
+        const receivedPrice = salePrice > 0
+          ? item.isInternalSale
+            ? getInternalSalePriceFromMarket(salePrice)
+            : getReceivedAmountFromSale(salePrice)
+          : Number(item.receivedPrice || 0);
+        const soldRowClass = item.isSold ? "bg-emerald-50/80 ring-1 ring-emerald-200" : "bg-slate-50";
+        const soldCardClass = item.isSold ? "bg-emerald-50/80 ring-1 ring-emerald-200" : "bg-white";
+        const soldInputClass = item.isSold ? "line-through text-slate-400" : "";
+        const soldBadge = item.isSold
+          ? '<div class="inline-flex rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">판매완료</div>'
+          : "";
+        const internalSaleBadge = item.isInternalSale
+          ? '<div class="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">내판</div>'
+          : "";
+        const receivedPlaceholderText = item.isInternalSale ? "내판 구매가" : "실수령액";
 
-            return `
+        return {
+          desktop: `
             <tr class="rounded-2xl ${soldRowClass}">
               <td class="px-3 py-2">
-                ${internalSaleBadge}${soldBadge}
+                <div class="mb-2 flex flex-wrap gap-2">${internalSaleBadge}${soldBadge}</div>
                 <input
                   type="text"
                   value="${item.name}"
@@ -765,10 +768,110 @@
                 </button>
               </td>
             </tr>
-          `;
-          }
-        )
-        .join("");
+          `,
+          mobile: `
+            <div class="rounded-[1.5rem] border border-slate-200 p-4 shadow-sm ${soldCardClass}">
+              <div class="mb-3 flex flex-wrap items-center gap-2">
+                ${internalSaleBadge}${soldBadge}
+              </div>
+              <div class="space-y-3">
+                <label class="block">
+                  <span class="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">아이템명</span>
+                  <input
+                    type="text"
+                    value="${item.name}"
+                    class="item-name w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${soldInputClass}"
+                    data-index="${index}"
+                  />
+                </label>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label class="block">
+                    <span class="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">경매장 판매가</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value="${salePrice}"
+                      class="item-sale-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${soldInputClass}"
+                      data-index="${index}"
+                    />
+                  </label>
+                  <label class="block">
+                    <span class="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">${receivedPlaceholderText}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value="${receivedPrice}"
+                      class="item-received-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${salePrice > 0 ? "bg-slate-100 text-slate-500" : ""} ${soldInputClass}"
+                      data-index="${index}"
+                      placeholder="${receivedPlaceholderText}"
+                      ${salePrice > 0 ? "readonly" : ""}
+                    />
+                  </label>
+                </div>
+                <label class="block">
+                  <span class="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">획득자</span>
+                  <select
+                    class="item-owner w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+                    data-index="${index}"
+                  >
+                    ${options}
+                  </select>
+                </label>
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      class="item-use-scissors h-4 w-4 rounded border-slate-300"
+                      data-index="${index}"
+                      ${item.useScissors ? "checked" : ""}
+                    />
+                    가위
+                  </label>
+                  <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      class="item-internal-sale h-4 w-4 rounded border-slate-300"
+                      data-index="${index}"
+                      ${item.isInternalSale ? "checked" : ""}
+                    />
+                    내판
+                  </label>
+                  <label class="col-span-2 inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      class="item-is-sold h-4 w-4 rounded border-slate-300"
+                      data-index="${index}"
+                      ${item.isSold ? "checked" : ""}
+                    />
+                    판매완료
+                  </label>
+                </div>
+                ${item.isInternalSale ? `
+                  <label class="block">
+                    <span class="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">내판 구매자</span>
+                    <select
+                      class="item-internal-buyer w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-900"
+                      data-index="${index}"
+                    >
+                      ${options}
+                    </select>
+                  </label>
+                ` : ""}
+                <button
+                  type="button"
+                  onclick="removeItem(${index})"
+                  class="w-full rounded-2xl bg-rose-500 px-4 py-3 font-bold text-white transition hover:bg-rose-400"
+                >
+                  아이템 삭제
+                </button>
+              </div>
+            </div>
+          `
+        };
+      });
+
+      tbody.innerHTML = itemViews.map((view) => view.desktop).join("");
+      cards.innerHTML = itemViews.map((view) => view.mobile).join("");
 
       document.querySelectorAll(".item-owner").forEach((select) => {
         const index = Number(select.dataset.index);
