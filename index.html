@@ -167,8 +167,8 @@
             <span class="mb-2 block text-sm font-semibold text-slate-700">지원금 금액</span>
             <input
               id="supportAmount"
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
               value="0"
               class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
             />
@@ -200,8 +200,8 @@
             <span class="mb-2 block text-sm font-semibold text-slate-700">카르마의 가위 가격</span>
             <input
               id="scissorsPrice"
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
               value="0"
               class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
             />
@@ -439,6 +439,10 @@
 
     function format(number) {
       return Math.floor(Number(number) || 0).toLocaleString("ko-KR");
+    }
+
+    function parseMoneyInput(value) {
+      return Number(String(value || "").replace(/[^\d.-]/g, "")) || 0;
     }
 
     function normalizeItem(item, fallbackOwner = "갑") {
@@ -690,18 +694,19 @@
               </td>
               <td class="px-3 py-2">
                 <input
-                  type="number"
-                  min="0"
-                  value="${salePrice}"
+                  type="text"
+                  inputmode="numeric"
+                  value="${salePrice > 0 ? format(salePrice) : ""}"
                   class="item-sale-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${soldInputClass}"
                   data-index="${index}"
+                  placeholder="0"
                 />
               </td>
               <td class="px-3 py-2">
                 <input
-                  type="number"
-                  min="0"
-                  value="${receivedPrice}"
+                  type="text"
+                  inputmode="numeric"
+                  value="${receivedPrice > 0 ? format(receivedPrice) : ""}"
                   class="item-received-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${salePrice > 0 ? "bg-slate-100 text-slate-500" : ""} ${soldInputClass}"
                   data-index="${index}"
                   placeholder="${receivedPlaceholderText}"
@@ -788,19 +793,20 @@
                   <label class="block">
                     <span class="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">경매장 판매가</span>
                     <input
-                      type="number"
-                      min="0"
-                      value="${salePrice}"
+                      type="text"
+                      inputmode="numeric"
+                      value="${salePrice > 0 ? format(salePrice) : ""}"
                       class="item-sale-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${soldInputClass}"
                       data-index="${index}"
+                      placeholder="0"
                     />
                   </label>
                   <label class="block">
                     <span class="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">${receivedPlaceholderText}</span>
                     <input
-                      type="number"
-                      min="0"
-                      value="${receivedPrice}"
+                      type="text"
+                      inputmode="numeric"
+                      value="${receivedPrice > 0 ? format(receivedPrice) : ""}"
                       class="item-received-price w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${salePrice > 0 ? "bg-slate-100 text-slate-500" : ""} ${soldInputClass}"
                       data-index="${index}"
                       placeholder="${receivedPlaceholderText}"
@@ -893,7 +899,7 @@
       document.querySelectorAll(".item-sale-price").forEach((input) => {
         input.addEventListener("change", function onItemSalePriceChange() {
           const index = Number(this.dataset.index);
-          const salePrice = Number(this.value || 0);
+          const salePrice = parseMoneyInput(this.value);
           items[index].salePrice = salePrice;
           if (salePrice > 0) {
             items[index].receivedPrice = items[index].isInternalSale
@@ -907,7 +913,11 @@
 
       document.querySelectorAll(".item-received-price").forEach((input) => {
         input.addEventListener("change", function onItemReceivedPriceChange() {
-          items[Number(this.dataset.index)].receivedPrice = Number(this.value || 0);
+          const index = Number(this.dataset.index);
+          items[index].receivedPrice = parseMoneyInput(this.value);
+          if (Number(items[index].salePrice || 0) <= 0) {
+            this.value = items[index].receivedPrice > 0 ? format(items[index].receivedPrice) : "";
+          }
           calculate();
         });
       });
@@ -1212,9 +1222,10 @@
         document.getElementById("shareCode").value = currentCode;
       }
 
-      document.getElementById("scissorsPrice").value = scissorsPrice;
+      document.getElementById("scissorsPrice").value = scissorsPrice > 0 ? format(scissorsPrice) : "";
       document.getElementById("scissorsPrice").addEventListener("change", function onScissorsPriceChange() {
-        scissorsPrice = Number(this.value || 0);
+        scissorsPrice = parseMoneyInput(this.value);
+        this.value = scissorsPrice > 0 ? format(scissorsPrice) : "";
         calculate();
       });
       document.getElementById("internalSaleDiscountRate").value = internalSaleDiscountRate;
@@ -1224,9 +1235,10 @@
         renderItems();
         calculate();
       });
-      document.getElementById("supportAmount").value = supportAmount;
+      document.getElementById("supportAmount").value = supportAmount > 0 ? format(supportAmount) : "";
       document.getElementById("supportAmount").addEventListener("change", function onSupportAmountChange() {
-        supportAmount = Number(this.value || 0);
+        supportAmount = parseMoneyInput(this.value);
+        this.value = supportAmount > 0 ? format(supportAmount) : "";
         calculate();
       });
 
