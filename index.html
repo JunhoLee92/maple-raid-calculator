@@ -971,6 +971,13 @@
           if (event.key !== "Enter") return;
           event.preventDefault();
           const index = Number(this.dataset.index);
+          const salePrice = parseMoneyInput(this.value);
+          items[index].salePrice = salePrice;
+          if (salePrice > 0) {
+            items[index].receivedPrice = items[index].isInternalSale
+              ? getInternalSalePriceFromMarket(salePrice)
+              : getReceivedAmountFromSale(salePrice);
+          }
           const isLastItem = index === items.length - 1;
 
           if (isLastItem) {
