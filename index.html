@@ -548,7 +548,11 @@
 
     function focusItemField(index, fieldClass) {
       requestAnimationFrame(() => {
-        const target = document.querySelector(`.${fieldClass}[data-index="${index}"]`);
+        const candidates = Array.from(document.querySelectorAll(`.${fieldClass}[data-index="${index}"]`));
+        const target = candidates.find((element) => {
+          const htmlElement = /** @type {HTMLElement} */ (element);
+          return htmlElement.offsetParent !== null || htmlElement.getClientRects().length > 0;
+        }) || candidates[0];
         if (!target) return;
         target.focus();
         if (typeof target.select === "function") {
