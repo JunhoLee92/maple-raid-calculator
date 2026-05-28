@@ -364,19 +364,27 @@
       return Math.floor(Number(number) || 0).toLocaleString("ko-KR");
     }
 
-    function getFeeRate(amount) {
-      if (amount >= 100000000) return 0.06;
-      if (amount >= 25000000) return 0.05;
-      if (amount >= 10000000) return 0.04;
-      if (amount >= 5000000) return 0.03;
-      if (amount >= 1000000) return 0.018;
-      if (amount >= 100000) return 0.008;
-      return 0;
-    }
+    const feeBrackets = [
+      { min: 100000, max: 1000000, rate: 0.008 },
+      { min: 1000000, max: 5000000, rate: 0.018 },
+      { min: 5000000, max: 10000000, rate: 0.03 },
+      { min: 10000000, max: 25000000, rate: 0.04 },
+      { min: 25000000, max: 100000000, rate: 0.05 },
+      { min: 100000000, max: Infinity, rate: 0.06 }
+    ];
 
     function calculateFee(amount) {
       if (amount < 100000) return 0;
-      return Math.floor(amount * getFeeRate(amount)) + 10000;
+
+      let progressiveFee = 0;
+
+      feeBrackets.forEach(({ min, max, rate }) => {
+        if (amount <= min) return;
+        const taxableAmount = Math.min(amount, max) - min;
+        progressiveFee += taxableAmount * rate;
+      });
+
+      return Math.floor(progressiveFee) + 10000;
     }
 
     function normalizeMembers() {
@@ -592,7 +600,7 @@
           <div class="mt-2 text-3xl font-black text-blue-700">${format(result.target)}</div>
         </div>
         <div class="rounded-[1.5rem] bg-rose-50 p-5">
-          <div class="text-sm text-slate-500">총 수수료 예상</div>
+          <div class="text-sm text-slate-500">총 누진 수수료 예상</div>
           <div class="mt-2 text-3xl font-black text-rose-600">${format(result.totalFee)}</div>
         </div>
         <div class="rounded-[1.5rem] bg-emerald-50 p-5">
