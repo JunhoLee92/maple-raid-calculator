@@ -1104,13 +1104,16 @@
                 const senderOriginal = Number(result.originalAmounts?.[transfer.from] || 0);
                 const receiverOriginal = Number(result.originalAmounts?.[transfer.to] || 0);
                 const receiverTarget = Number(result.targetMap?.[transfer.to] || result.target || 0);
+                const receiverOriginalText = receiverOriginal > 0
+                  ? `${transfer.to}님도 이미 <span class="font-bold text-slate-900">${format(receiverOriginal)}</span>을 반영받았습니다. `
+                  : "";
 
                 return `
                   <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
                     <div class="text-xl font-black">${transfer.from} -> ${transfer.to}</div>
                     <div class="mt-2 text-sm leading-6 text-slate-600">
                       ${transfer.from}님은 판매/내판으로 <span class="font-bold text-slate-900">${format(senderOriginal)}</span>이 먼저 반영되어 있고,
-                      ${transfer.to}님도 이미 <span class="font-bold text-slate-900">${format(receiverOriginal)}</span>을 반영받았습니다.
+                      ${receiverOriginalText}
                       그래서 ${transfer.to}님이 목표 정산액 <span class="font-bold text-slate-900">${format(receiverTarget)}</span>까지 맞추는 데 필요한
                       나머지 <span class="font-bold text-slate-900">${format(transfer.amount)}</span>만 보내면 됩니다.
                     </div>
