@@ -72,29 +72,41 @@
     <main id="calculator" class="mt-6 space-y-6">
       <section id="how-to-use" class="rounded-[2rem] bg-white p-6 shadow-xl">
         <h2 class="text-2xl font-black">사용안내</h2>
-        <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div class="mt-5 rounded-[1.5rem] bg-emerald-50 p-5">
+          <div class="text-sm font-bold text-emerald-700">왜 이 계산기를 쓰나요?</div>
+          <p class="mt-3 text-sm leading-6 text-slate-700">
+            기존 방식은 아이템을 판 사람이 각자 따로 분배를 보내야 해서 택배를 여러 번 보내고 수수료도 여러 번 냅니다.
+            예를 들어 A가 3,000만, B가 8,000만 실수령액을 먼저 챙겼다면 A와 B가 각각 나머지 파티원에게 다시 송금해야 합니다.
+            이 계산기는 판매 담당자가 이미 받은 금액을 먼저 반영한 뒤 부족하거나 초과한 금액만 송금 경로로 정리해서,
+            불필요한 택배와 수수료를 최대한 줄여 줍니다.
+          </p>
+        </div>
+        <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div class="rounded-[1.5rem] bg-slate-50 p-5">
-            <div class="text-sm font-bold text-slate-500">1. 파티원 등록</div>
+            <div class="text-sm font-bold text-slate-500">1. 파티원과 지원금</div>
             <p class="mt-3 text-sm leading-6 text-slate-700">
               파티원 이름을 입력하고, 지원금이 필요한 사람이 있으면 `지원금`을 체크하세요.
             </p>
           </div>
           <div class="rounded-[1.5rem] bg-slate-50 p-5">
-            <div class="text-sm font-bold text-slate-500">2. 아이템 입력</div>
+            <div class="text-sm font-bold text-slate-500">2. 빠른 아이템 입력</div>
             <p class="mt-3 text-sm leading-6 text-slate-700">
-              경매장 판매가를 입력하면 실수령액이 자동 계산됩니다. 실수령액만 직접 입력해도 됩니다.
+              아이템명 입력 후 `Enter`를 누르면 경매장 판매가로 이동합니다.
+              판매가 입력 후 다시 `Enter`를 누르면 다음 줄이 자동 생성되고 바로 다음 아이템명 칸으로 넘어갑니다.
             </p>
           </div>
           <div class="rounded-[1.5rem] bg-slate-50 p-5">
-            <div class="text-sm font-bold text-slate-500">3. 옵션 반영</div>
+            <div class="text-sm font-bold text-slate-500">3. 판매가와 옵션</div>
             <p class="mt-3 text-sm leading-6 text-slate-700">
-              `가위`를 체크하면 가위값이 차감되고, `판매완료`를 체크하면 판매된 아이템으로 표시됩니다.
+              경매장 판매가를 입력하면 실수령액이 자동 계산되고, 실수령액만 직접 입력해도 됩니다.
+              `가위`, `내판`, `판매완료` 옵션도 같은 줄에서 바로 반영됩니다.
             </p>
           </div>
           <div class="rounded-[1.5rem] bg-slate-50 p-5">
-            <div class="text-sm font-bold text-slate-500">4. 정산 확인</div>
+            <div class="text-sm font-bold text-slate-500">4. 저장과 공유</div>
             <p class="mt-3 text-sm leading-6 text-slate-700">
-              아래 결과에서 최종 실수령액과 송금 경로를 확인하고, 필요하면 공유 링크를 저장해서 같이 보세요.
+              `코드 생성`으로 방 코드를 만들고 `저장`을 누른 뒤 `링크 복사`를 누르면,
+              다른 사람도 같은 정산 내용을 그대로 열어볼 수 있습니다.
             </p>
           </div>
         </div>
@@ -142,6 +154,12 @@
           >
             저장
           </button>
+        </div>
+
+        <div class="mt-4 grid gap-3 rounded-[1.5rem] bg-slate-50 p-4 text-sm leading-6 text-slate-600 md:grid-cols-3">
+          <div><span class="font-bold text-slate-900">1.</span> `코드 생성`을 눌러 현재 정산용 코드를 만듭니다.</div>
+          <div><span class="font-bold text-slate-900">2.</span> 내용 입력 후 `저장`을 눌러 Firebase에 올립니다.</div>
+          <div><span class="font-bold text-slate-900">3.</span> `링크 복사`로 공유하면 같은 내용이 그대로 열립니다.</div>
         </div>
 
         <div class="mt-3 flex justify-end">
@@ -263,11 +281,18 @@
 
         <div class="rounded-[2rem] bg-white p-6 shadow-xl">
           <h2 class="text-2xl font-black">송금 경로</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-600">
+            아이템 판매 실수령액과 내판 반영 금액을 먼저 각 담당자에게 잡아 둔 뒤,
+            균등 분배를 위해 실제로 더 보내야 하는 금액만 아래에 표시합니다.
+          </p>
           <div id="transfers" class="mt-5 space-y-3"></div>
         </div>
 
         <div class="rounded-[2rem] bg-white p-6 shadow-xl">
           <h2 class="text-2xl font-black">최종 실수령액</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-600">
+            각 카드에서 판매 또는 내판으로 먼저 반영된 금액과, 송금 경로를 거친 뒤 최종적으로 남는 금액을 함께 확인할 수 있습니다.
+          </p>
           <div id="finalAmounts" class="mt-5 grid gap-4 md:grid-cols-2"></div>
         </div>
       </section>
@@ -1078,6 +1103,10 @@
               (transfer) => `
                 <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
                   <div class="text-xl font-black">${transfer.from} -> ${transfer.to}</div>
+                  <div class="mt-2 text-sm leading-6 text-slate-600">
+                    ${transfer.from}님은 판매/내판으로 <span class="font-bold text-slate-900">${format(result.originalAmounts?.[transfer.from] || 0)}</span>이 먼저 반영되어 있어,
+                    남는 몫 중 <span class="font-bold text-slate-900">${format(transfer.amount)}</span>만 ${transfer.to}님에게 보내면 됩니다.
+                  </div>
                   <div class="mt-2 text-sm text-slate-600">송금액: <span class="font-bold text-slate-900">${format(transfer.amount)}</span></div>
                   <div class="mt-1 text-sm text-slate-600">수수료: <span class="font-bold text-rose-600">${format(transfer.fee)}</span></div>
                   <div class="mt-3 text-base font-bold">총 지출 ${format(transfer.totalCost)}</div>
@@ -1089,12 +1118,28 @@
 
       document.getElementById("finalAmounts").innerHTML = Object.entries(result.finalAmounts)
         .map(
-          ([name, amount]) => `
+          ([name, amount]) => {
+            const originalAmount = Number(result.originalAmounts?.[name] || 0);
+            const delta = amount - originalAmount;
+            const adjustmentText = delta > 0
+              ? `송금 경로에서 ${format(delta)} 더 받습니다.`
+              : delta < 0
+                ? `송금 경로와 수수료 반영으로 ${format(Math.abs(delta))} 줄어듭니다.`
+                : "추가 송금 없이 현재 금액이 그대로 최종 정산액입니다.";
+
+            return `
             <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
               <div class="text-sm text-slate-500">${name}</div>
+              <div class="mt-3 rounded-2xl bg-white px-4 py-3 text-sm text-slate-600">
+                판매/내판 선반영 금액
+                <div class="mt-1 text-xl font-black text-slate-900">${format(originalAmount)}</div>
+              </div>
+              <div class="mt-3 text-sm leading-6 text-slate-600">${adjustmentText}</div>
+              <div class="mt-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">최종 실수령액</div>
               <div class="mt-2 text-4xl font-black text-blue-700">${format(amount)}</div>
             </div>
-          `
+          `;
+          }
         )
         .join("");
     }
@@ -1128,6 +1173,7 @@
           internalSaleTotal: 0,
           target: 0,
           transfers: [],
+          originalAmounts: {},
           finalAmounts: {},
           totalFee: 0
         });
@@ -1273,6 +1319,7 @@
         internalSaleTotal,
         target: bestResult?.baseTarget ?? average,
         transfers: bestResult?.transfers ?? [],
+        originalAmounts,
         finalAmounts: bestResult?.finalAmounts ?? originalAmounts,
         totalFee: bestResult?.totalFee ?? 0
       });
