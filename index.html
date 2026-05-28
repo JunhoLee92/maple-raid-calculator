@@ -42,17 +42,14 @@
 <body class="min-h-screen bg-slate-100 text-slate-900">
   <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
     <header class="overflow-hidden rounded-[2rem] bg-slate-900 text-white shadow-2xl">
-      <div class="grid gap-6 px-6 py-8 md:grid-cols-[1.5fr_1fr] md:px-8 md:py-10">
+      <div class="px-6 py-8 md:px-8 md:py-10">
         <div>
-          <div class="mb-3 inline-flex rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-slate-200">
-            Web Calculator
-          </div>
           <h1 class="text-3xl font-black tracking-tight sm:text-4xl">
             메이플 레이드 정산기
           </h1>
           <p class="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-            드랍템 판매가, 실수령액, 획득자를 입력하면 실수령액과 송금 경로를 계산합니다.
-            Firebase를 연결하면 공유 링크로 같은 데이터를 불러올 수 있고, 도메인을 연결하면 실제 사이트로 공개할 수 있습니다.
+            드랍템 판매가, 실수령액, 지원금, 가위값을 반영해서
+            파티원별 최종 정산 금액과 송금 경로를 한 번에 계산합니다.
           </p>
           <div class="mt-6 flex flex-wrap gap-3">
             <a
@@ -62,32 +59,53 @@
               계산기 시작
             </a>
             <a
-              href="#deploy-guide"
+              href="#how-to-use"
               class="rounded-xl border border-white/20 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10"
             >
-              배포 가이드 보기
+              사용안내 보기
             </a>
           </div>
-        </div>
-        <div class="rounded-[1.75rem] bg-white/10 p-5 backdrop-blur">
-          <div class="text-sm font-semibold text-slate-200">배포 준비 상태</div>
-          <ul class="mt-4 space-y-3 text-sm text-slate-100">
-            <li>정적 사이트 진입 파일: `index.html`</li>
-            <li>광고 파일: `ads.txt`</li>
-            <li>공유 저장소: Firebase 설정 후 활성화</li>
-            <li>도메인 연결 후 Google AdSense 신청 가능</li>
-          </ul>
         </div>
       </div>
     </header>
 
     <main id="calculator" class="mt-6 space-y-6">
+      <section id="how-to-use" class="rounded-[2rem] bg-white p-6 shadow-xl">
+        <h2 class="text-2xl font-black">사용안내</h2>
+        <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div class="rounded-[1.5rem] bg-slate-50 p-5">
+            <div class="text-sm font-bold text-slate-500">1. 파티원 등록</div>
+            <p class="mt-3 text-sm leading-6 text-slate-700">
+              파티원 이름을 입력하고, 지원금이 필요한 사람이 있으면 `지원금`을 체크하세요.
+            </p>
+          </div>
+          <div class="rounded-[1.5rem] bg-slate-50 p-5">
+            <div class="text-sm font-bold text-slate-500">2. 아이템 입력</div>
+            <p class="mt-3 text-sm leading-6 text-slate-700">
+              경매장 판매가를 입력하면 실수령액이 자동 계산됩니다. 실수령액만 직접 입력해도 됩니다.
+            </p>
+          </div>
+          <div class="rounded-[1.5rem] bg-slate-50 p-5">
+            <div class="text-sm font-bold text-slate-500">3. 옵션 반영</div>
+            <p class="mt-3 text-sm leading-6 text-slate-700">
+              `가위`를 체크하면 가위값이 차감되고, `판매완료`를 체크하면 판매된 아이템으로 표시됩니다.
+            </p>
+          </div>
+          <div class="rounded-[1.5rem] bg-slate-50 p-5">
+            <div class="text-sm font-bold text-slate-500">4. 정산 확인</div>
+            <p class="mt-3 text-sm leading-6 text-slate-700">
+              아래 결과에서 최종 실수령액과 송금 경로를 확인하고, 필요하면 공유 링크를 저장해서 같이 보세요.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section class="rounded-[2rem] bg-white p-6 shadow-xl">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 class="text-2xl font-black">공유 링크</h2>
             <p class="mt-2 text-sm text-slate-600">
-              Firebase가 설정되어 있으면 생성한 링크로 다른 사람도 같은 정산 화면에 접속할 수 있습니다.
+              저장 후 링크를 복사하면 같은 정산 내용을 다시 열어볼 수 있습니다.
             </p>
           </div>
           <div class="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-600" id="syncStatus">
@@ -207,53 +225,21 @@
         </div>
       </section>
 
-      <section class="grid gap-6 lg:grid-cols-[1.6fr_0.8fr]">
-        <div class="space-y-6">
-          <div class="rounded-[2rem] bg-white p-6 shadow-xl">
-            <h2 class="text-2xl font-black">계산 결과</h2>
-            <div id="summary" class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4"></div>
-          </div>
-
-          <div class="rounded-[2rem] bg-white p-6 shadow-xl">
-            <h2 class="text-2xl font-black">송금 경로</h2>
-            <div id="transfers" class="mt-5 space-y-3"></div>
-          </div>
-
-          <div class="rounded-[2rem] bg-white p-6 shadow-xl">
-            <h2 class="text-2xl font-black">최종 실수령액</h2>
-            <div id="finalAmounts" class="mt-5 grid gap-4 md:grid-cols-2"></div>
-          </div>
+      <section class="space-y-6">
+        <div class="rounded-[2rem] bg-white p-6 shadow-xl">
+          <h2 class="text-2xl font-black">계산 결과</h2>
+          <div id="summary" class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4"></div>
         </div>
 
-        <aside class="space-y-6">
-          <div class="rounded-[2rem] bg-white p-6 shadow-xl">
-            <h2 class="text-xl font-black">광고 영역</h2>
-            <p class="mt-2 text-sm leading-6 text-slate-600">
-              `ca-pub-XXXXXXXXXXXXXXXX`와 `data-ad-slot` 값을 실제 AdSense 값으로 교체한 뒤 사용하세요.
-            </p>
-            <div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
-              <ins
-                class="adsbygoogle"
-                style="display:block"
-                data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
-                data-ad-slot="1234567890"
-                data-ad-format="auto"
-                data-full-width-responsive="true"
-              ></ins>
-            </div>
-          </div>
+        <div class="rounded-[2rem] bg-white p-6 shadow-xl">
+          <h2 class="text-2xl font-black">송금 경로</h2>
+          <div id="transfers" class="mt-5 space-y-3"></div>
+        </div>
 
-          <div id="deploy-guide" class="rounded-[2rem] bg-slate-900 p-6 text-white shadow-xl">
-            <h2 class="text-xl font-black">배포 체크</h2>
-            <ol class="mt-4 space-y-3 text-sm text-slate-200">
-              <li>1. `index.html`을 GitHub Pages, Netlify, Vercel 중 하나에 올립니다.</li>
-              <li>2. 커스텀 도메인을 연결하면 `SITE_CONFIG.siteUrl`과 canonical/OG URL도 그 주소로 다시 바꿉니다.</li>
-              <li>3. Firebase 프로젝트를 만들고 Firestore를 켭니다.</li>
-              <li>4. `ads.txt`와 AdSense 코드의 퍼블리셔 ID를 실제 값으로 교체합니다.</li>
-              <li>5. Search Console, AdSense에서 도메인 소유권 검증 후 광고 승인을 진행합니다.</li>
-            </ol>
-          </div>
-        </aside>
+        <div class="rounded-[2rem] bg-white p-6 shadow-xl">
+          <h2 class="text-2xl font-black">최종 실수령액</h2>
+          <div id="finalAmounts" class="mt-5 grid gap-4 md:grid-cols-2"></div>
+        </div>
       </section>
     </main>
 
