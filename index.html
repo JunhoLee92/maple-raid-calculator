@@ -604,6 +604,11 @@
         }) || candidates[0];
         if (!target) return;
         target.focus();
+        if (fieldClass === "item-name" && typeof target.setSelectionRange === "function") {
+          const textLength = String(target.value || "").length;
+          target.setSelectionRange(textLength, textLength);
+          return;
+        }
         if (typeof target.select === "function") {
           target.select();
         }
@@ -794,6 +799,10 @@
                 <input
                   type="text"
                   value="${item.name}"
+                  lang="ko"
+                  autocapitalize="off"
+                  autocomplete="off"
+                  spellcheck="false"
                   class="item-name w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${soldInputClass}"
                   data-index="${index}"
                 />
@@ -891,6 +900,10 @@
                   <input
                     type="text"
                     value="${item.name}"
+                    lang="ko"
+                    autocapitalize="off"
+                    autocomplete="off"
+                    spellcheck="false"
                     class="item-name w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 ${soldInputClass}"
                     data-index="${index}"
                   />
