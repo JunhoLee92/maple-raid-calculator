@@ -571,6 +571,30 @@
       return Math.max(basePrice - scissorsPrice, 0);
     }
 
+    function buildIntegerTargetMap(targets) {
+      const entries = Object.entries(targets).map(([name, rawTarget]) => {
+        const floored = Math.floor(rawTarget);
+        return {
+          name,
+          floor: floored,
+          fraction: rawTarget - floored
+        };
+      });
+      const totalFloor = entries.reduce((sum, entry) => sum + entry.floor, 0);
+      const totalRaw = Math.round(Object.values(targets).reduce((sum, value) => sum + value, 0));
+      let remainder = Math.max(totalRaw - totalFloor, 0);
+
+      entries
+        .sort((left, right) => right.fraction - left.fraction)
+        .forEach((entry) => {
+          if (remainder <= 0) return;
+          entry.floor += 1;
+          remainder -= 1;
+        });
+
+      return Object.fromEntries(entries.map((entry) => [entry.name, entry.floor]));
+    }
+
     function focusItemField(index, fieldClass) {
       requestAnimationFrame(() => {
         const candidates = Array.from(document.querySelectorAll(`.${fieldClass}[data-index="${index}"]`));
@@ -1218,8 +1242,10 @@
       let bestResult = null;
 
       for (let offset = -3000000; offset <= 3000000; offset += 1000) {
-        const targetMap = Object.fromEntries(
-          Object.entries(desiredBaseTargets).map(([name, target]) => [name, target + offset])
+        const targetMap = buildIntegerTargetMap(
+          Object.fromEntries(
+            Object.entries(desiredBaseTargets).map(([name, target]) => [name, target + offset])
+          )
         );
         const senders = [];
         const receivers = [];
@@ -1267,6 +1293,8 @@
 
           sender.remaining -= totalCost;
           receiver.needed -= bestAmount;
+          if (Math.abs(sender.remaining) < 1) sender.remaining = 0;
+          if (Math.abs(receiver.needed) < 1) receiver.needed = 0;
           transfers.push({
             from: sender.name,
             to: receiver.name,
