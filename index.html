@@ -162,6 +162,10 @@
           <div><span class="font-bold text-slate-900">3.</span> `링크 복사`로 공유하면 같은 내용이 그대로 열립니다.</div>
         </div>
 
+        <div id="shareMetaPreview" class="mt-4 rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+          현재 공유 제목: 메이플 레이드 정산기
+        </div>
+
         <div class="mt-3 flex justify-end">
           <button
             type="button"
@@ -397,6 +401,31 @@
         ? configuredUrl.replace(/\/$/, "")
         : `${window.location.origin}${window.location.pathname}`;
       return `${baseUrl}?room=${encodeURIComponent(code)}`;
+    }
+
+    function formatDisplayDate(value) {
+      if (!value) return "";
+      const [year, month, day] = String(value).split("-");
+      if (!year || !month || !day) return String(value);
+      return `${Number(month)}/${Number(day)}`;
+    }
+
+    function getSettlementDisplayTitle() {
+      const pieces = ["메이플 레이드 정산기"];
+      const displayDate = formatDisplayDate(settlementDate);
+      if (displayDate) pieces.push(displayDate);
+      if (settlementTitle) pieces.push(settlementTitle);
+      return pieces.join(" | ");
+    }
+
+    function renderShareMetaPreview() {
+      const preview = document.getElementById("shareMetaPreview");
+      if (!preview) return;
+      preview.textContent = `현재 공유 제목: ${getSettlementDisplayTitle()}`;
+    }
+
+    function updateDocumentTitle() {
+      document.title = getSettlementDisplayTitle();
     }
 
     function generateRandomCode() {
@@ -723,6 +752,8 @@
         setSyncStatus("현재 브라우저에 임시 저장된 내용이 초기화되었습니다.");
       }
 
+      renderShareMetaPreview();
+      updateDocumentTitle();
       renderMembers();
       renderItems();
       calculate();
@@ -1483,11 +1514,15 @@
       document.getElementById("settlementTitle").value = settlementTitle;
       document.getElementById("settlementTitle").addEventListener("change", function onSettlementTitleChange() {
         settlementTitle = this.value.trim();
+        renderShareMetaPreview();
+        updateDocumentTitle();
         persistLocalDraft();
       });
       document.getElementById("settlementDate").value = settlementDate;
       document.getElementById("settlementDate").addEventListener("change", function onSettlementDateChange() {
         settlementDate = this.value || getTodayDateInputValue();
+        renderShareMetaPreview();
+        updateDocumentTitle();
         persistLocalDraft();
       });
       document.getElementById("scissorsPrice").value = scissorsPrice > 0 ? format(scissorsPrice) : "";
@@ -1512,6 +1547,8 @@
 
       renderMembers();
       renderItems();
+      renderShareMetaPreview();
+      updateDocumentTitle();
       calculate();
       initializeAds();
     }
