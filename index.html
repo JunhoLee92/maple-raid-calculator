@@ -162,11 +162,23 @@
           <div><span class="font-bold text-slate-900">3.</span> `링크 복사`로 공유하면 같은 내용이 그대로 열립니다.</div>
         </div>
 
+        <div class="mt-4 rounded-[1.5rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+          여러 사람이 동시에 같은 링크를 수정하면 저장 충돌이 날 수 있습니다.
+          저장 전에 `최신 불러오기`로 가장 최근 저장본을 확인하세요. 충돌이 감지되면 저장이 막히고 다시 불러오기를 안내합니다.
+        </div>
+
         <div id="shareMetaPreview" class="mt-4 rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
           현재 공유 제목: 메이플 레이드 정산기
         </div>
 
-        <div class="mt-3 flex justify-end">
+        <div class="mt-3 flex flex-wrap justify-end gap-3">
+          <button
+            type="button"
+            onclick="reloadSharedData()"
+            class="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+          >
+            최신 불러오기
+          </button>
           <button
             type="button"
             onclick="resetCalculator()"
@@ -365,6 +377,7 @@
       internalBuyer: "갑"
     }];
     const validFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
+    const versionConflictErrorCode = "VERSION_CONFLICT";
 
     function getTodayDateInputValue() {
       const today = new Date();
@@ -380,6 +393,7 @@
     let settlementTitle = "";
     let settlementDate = getTodayDateInputValue();
     let currentCode = "";
+    let loadedVersion = 0;
     let db = null;
     let firebaseReady = false;
 
@@ -443,6 +457,7 @@
           scissorsPrice,
           supportAmount,
           internalSaleDiscountRate,
+          loadedVersion,
           currentCode
         })
       );
@@ -457,6 +472,7 @@
       settlementTitle = "";
       settlementDate = getTodayDateInputValue();
       currentCode = "";
+      loadedVersion = 0;
       localStorage.removeItem(localStorageKey);
       window.history.replaceState({}, "", window.location.pathname);
     }
@@ -481,6 +497,7 @@
         scissorsPrice = Number(draft.scissorsPrice || 0);
         supportAmount = Number(draft.supportAmount || 0);
         internalSaleDiscountRate = Number(draft.internalSaleDiscountRate || defaultInternalSaleDiscountRate);
+        loadedVersion = Number(draft.loadedVersion || 0);
         currentCode = typeof draft.currentCode === "string" ? draft.currentCode : "";
       } catch (error) {
         console.error("로컬 초안 복원 실패", error);
@@ -494,19 +511,43 @@
       }
 
       try {
-        const [{ initializeApp }, { getFirestore, doc, setDoc, getDoc }] = await Promise.all([
+        const [{ initializeApp }, { getFirestore, doc, getDoc, runTransaction }] = await Promise.all([
           import("https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js"),
           import("https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js")
         ]);
 
         const app = initializeApp(siteConfig.firebase);
-        db = { firestore: getFirestore(app), doc, setDoc, getDoc };
+        db = { firestore: getFirestore(app), doc, getDoc, runTransaction };
         firebaseReady = true;
         setSyncStatus("Firebase 연결 완료: 공유 링크 저장과 불러오기를 사용할 수 있습니다.");
       } catch (error) {
         console.error("Firebase 초기화 실패", error);
         setSyncStatus("Firebase 연결 실패: 현재 브라우저에만 임시 저장됩니다.");
       }
+    }
+
+    function buildSharedPayload(version, updatedAt) {
+      return {
+        settlementTitle,
+        settlementDate,
+        members,
+        items,
+        scissorsPrice,
+        supportAmount,
+        internalSaleDiscountRate,
+        version,
+        updatedAt
+      };
+    }
+
+    function formatDateTime(timestamp) {
+      if (!timestamp) return "";
+      return new Date(Number(timestamp)).toLocaleString("ko-KR", {
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
     }
 
     async function saveData() {
@@ -516,19 +557,29 @@
         return;
       }
 
-      await db.setDoc(
-        db.doc(db.firestore, "rooms", currentCode),
-        {
-          settlementTitle,
-          settlementDate,
-          members,
-          items,
-          scissorsPrice,
-          supportAmount,
-          internalSaleDiscountRate,
-          updatedAt: Date.now()
+      const roomRef = db.doc(db.firestore, "rooms", currentCode);
+      const result = await db.runTransaction(db.firestore, async (transaction) => {
+        const snapshot = await transaction.get(roomRef);
+        const remoteData = snapshot.exists() ? snapshot.data() : null;
+        const remoteVersion = Number(remoteData?.version || 0);
+
+        if (snapshot.exists() && remoteVersion !== loadedVersion) {
+          const error = new Error("다른 사용자가 먼저 저장했습니다.");
+          error.code = versionConflictErrorCode;
+          error.remoteVersion = remoteVersion;
+          error.remoteUpdatedAt = Number(remoteData?.updatedAt || 0);
+          throw error;
         }
-      );
+
+        const nextVersion = remoteVersion + 1;
+        const updatedAt = Date.now();
+        transaction.set(roomRef, buildSharedPayload(nextVersion, updatedAt));
+        return { version: nextVersion, updatedAt };
+      });
+
+      loadedVersion = result.version;
+      persistLocalDraft();
+      setSyncStatus(`Firebase 저장 완료: 버전 ${loadedVersion} · ${formatDateTime(result.updatedAt)}`);
     }
 
     async function loadSharedData() {
@@ -546,6 +597,7 @@
 
       const snapshot = await db.getDoc(db.doc(db.firestore, "rooms", currentCode));
       if (!snapshot.exists()) {
+        loadedVersion = 0;
         setSyncStatus("공유 링크는 열렸지만 저장된 데이터가 없습니다. 새로 입력 후 저장하세요.");
         return;
       }
@@ -566,7 +618,8 @@
       scissorsPrice = Number(data.scissorsPrice || 0);
       supportAmount = Number(data.supportAmount || 0);
       internalSaleDiscountRate = Number(data.internalSaleDiscountRate || defaultInternalSaleDiscountRate);
-      setSyncStatus("공유 데이터 불러오기 완료");
+      loadedVersion = Number(data.version || 0);
+      setSyncStatus(`공유 데이터 불러오기 완료: 버전 ${loadedVersion}${data.updatedAt ? ` · ${formatDateTime(data.updatedAt)}` : ""}`);
     }
 
     function format(number) {
@@ -730,8 +783,45 @@
         alert(firebaseReady ? "Firebase와 브라우저에 저장되었습니다." : "브라우저에 임시 저장되었습니다.");
       } catch (error) {
         console.error(error);
+        if (error?.code === versionConflictErrorCode) {
+          setSyncStatus(`버전 충돌: 다른 사용자가 먼저 저장했습니다${error.remoteUpdatedAt ? ` · ${formatDateTime(error.remoteUpdatedAt)}` : ""}`);
+          const confirmed = window.confirm("다른 사용자가 먼저 저장했습니다. 최신 저장본을 다시 불러올까요?");
+          if (confirmed) {
+            await window.reloadSharedData(true);
+          }
+          return;
+        }
         alert("저장 중 오류가 발생했습니다.");
       }
+    };
+
+    window.reloadSharedData = async function reloadSharedData(skipConfirm = false) {
+      if (!currentCode) {
+        alert("먼저 공유 코드를 생성하거나 공유 링크를 여세요.");
+        return;
+      }
+      if (!firebaseReady) {
+        alert("Firebase 연결 후 사용할 수 있습니다.");
+        return;
+      }
+
+      if (!skipConfirm) {
+        const confirmed = window.confirm("현재 입력 중인 내용을 덮어쓰고 최신 저장본을 다시 불러올까요?");
+        if (!confirmed) return;
+      }
+
+      await loadSharedData();
+      document.getElementById("shareCode").value = currentCode;
+      document.getElementById("settlementTitle").value = settlementTitle;
+      document.getElementById("settlementDate").value = settlementDate;
+      document.getElementById("scissorsPrice").value = scissorsPrice > 0 ? format(scissorsPrice) : "";
+      document.getElementById("supportAmount").value = supportAmount > 0 ? format(supportAmount) : "";
+      document.getElementById("internalSaleDiscountRate").value = internalSaleDiscountRate;
+      renderShareMetaPreview();
+      updateDocumentTitle();
+      renderMembers();
+      renderItems();
+      calculate();
     };
 
     window.resetCalculator = function resetCalculator() {
