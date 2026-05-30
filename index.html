@@ -174,6 +174,32 @@
       </section>
 
       <section class="rounded-[2rem] bg-white p-6 shadow-xl">
+        <div class="mb-4">
+          <h2 class="text-2xl font-black">정산 정보</h2>
+          <p class="mt-1 text-sm text-slate-600">공유용 제목을 직접 적고, 날짜는 오늘 날짜를 기본값으로 두고 필요하면 수정하세요.</p>
+        </div>
+        <div class="grid gap-4 md:grid-cols-[1fr_220px]">
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">제목</span>
+            <input
+              id="settlementTitle"
+              type="text"
+              placeholder="예: 5/31 검마 1팟 정산"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">날짜</span>
+            <input
+              id="settlementDate"
+              type="date"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+            />
+          </label>
+        </div>
+      </section>
+
+      <section class="rounded-[2rem] bg-white p-6 shadow-xl">
         <div class="mb-4 flex items-center justify-between gap-3">
           <div>
             <h2 class="text-2xl font-black">파티원</h2>
@@ -211,13 +237,22 @@
             <h2 class="text-2xl font-black">드랍 아이템</h2>
             <p class="mt-1 text-sm text-slate-600">경매장 판매가 또는 실수령액과 획득자를 입력하세요.</p>
           </div>
-          <button
-            type="button"
-            onclick="addItem()"
-            class="rounded-2xl bg-emerald-500 px-5 py-3 font-bold text-white transition hover:bg-emerald-400"
-          >
-            + 아이템 추가
-          </button>
+          <div class="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onclick="clearItems()"
+              class="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-3 font-bold text-rose-700 transition hover:bg-rose-100"
+            >
+              아이템 일괄 삭제
+            </button>
+            <button
+              type="button"
+              onclick="addItem()"
+              class="rounded-2xl bg-emerald-500 px-5 py-3 font-bold text-white transition hover:bg-emerald-400"
+            >
+              + 아이템 추가
+            </button>
+          </div>
         </div>
 
         <div class="mb-4 grid gap-3 rounded-[1.5rem] bg-slate-50 p-4 md:grid-cols-[1fr_220px]">
@@ -327,11 +362,19 @@
     }];
     const validFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
 
+    function getTodayDateInputValue() {
+      const today = new Date();
+      const timezoneOffset = today.getTimezoneOffset() * 60000;
+      return new Date(today.getTime() - timezoneOffset).toISOString().slice(0, 10);
+    }
+
     let members = structuredClone(defaultMembers);
     let items = structuredClone(defaultItems);
     let scissorsPrice = 0;
     let supportAmount = 0;
     let internalSaleDiscountRate = defaultInternalSaleDiscountRate;
+    let settlementTitle = "";
+    let settlementDate = getTodayDateInputValue();
     let currentCode = "";
     let db = null;
     let firebaseReady = false;
@@ -364,6 +407,8 @@
       localStorage.setItem(
         localStorageKey,
         JSON.stringify({
+          settlementTitle,
+          settlementDate,
           members,
           items,
           scissorsPrice,
@@ -380,6 +425,8 @@
       scissorsPrice = 0;
       supportAmount = 0;
       internalSaleDiscountRate = defaultInternalSaleDiscountRate;
+      settlementTitle = "";
+      settlementDate = getTodayDateInputValue();
       currentCode = "";
       localStorage.removeItem(localStorageKey);
       window.history.replaceState({}, "", window.location.pathname);
@@ -390,6 +437,10 @@
         const raw = localStorage.getItem(localStorageKey);
         if (!raw) return;
         const draft = JSON.parse(raw);
+        settlementTitle = typeof draft.settlementTitle === "string" ? draft.settlementTitle : "";
+        settlementDate = typeof draft.settlementDate === "string" && draft.settlementDate
+          ? draft.settlementDate
+          : getTodayDateInputValue();
         members = Array.isArray(draft.members) && draft.members.length ? draft.members : structuredClone(defaultMembers);
         members = members.map((member) => ({
           name: String(member.name || ""),
@@ -439,6 +490,8 @@
       await db.setDoc(
         db.doc(db.firestore, "rooms", currentCode),
         {
+          settlementTitle,
+          settlementDate,
           members,
           items,
           scissorsPrice,
@@ -469,6 +522,10 @@
       }
 
       const data = snapshot.data();
+      settlementTitle = typeof data.settlementTitle === "string" ? data.settlementTitle : "";
+      settlementDate = typeof data.settlementDate === "string" && data.settlementDate
+        ? data.settlementDate
+        : getTodayDateInputValue();
       members = Array.isArray(data.members) && data.members.length ? data.members : structuredClone(defaultMembers);
       members = members.map((member) => ({
         name: String(member.name || ""),
@@ -654,6 +711,8 @@
 
       resetToDefaults();
       document.getElementById("shareCode").value = "";
+      document.getElementById("settlementTitle").value = "";
+      document.getElementById("settlementDate").value = settlementDate;
       document.getElementById("scissorsPrice").value = "";
       document.getElementById("supportAmount").value = "";
       document.getElementById("internalSaleDiscountRate").value = defaultInternalSaleDiscountRate;
@@ -707,6 +766,16 @@
         items = structuredClone(defaultItems);
         items[0].owner = members[0]?.name || defaultMembers[0].name;
       }
+      renderItems();
+      calculate();
+    };
+
+    window.clearItems = function clearItems() {
+      const confirmed = window.confirm("아이템 목록을 모두 삭제할까요?");
+      if (!confirmed) return;
+      items = structuredClone(defaultItems);
+      items[0].owner = members[0]?.name || defaultMembers[0].name;
+      items[0].internalBuyer = members[0]?.name || defaultMembers[0].name;
       renderItems();
       calculate();
     };
@@ -1411,6 +1480,16 @@
         document.getElementById("shareCode").value = currentCode;
       }
 
+      document.getElementById("settlementTitle").value = settlementTitle;
+      document.getElementById("settlementTitle").addEventListener("change", function onSettlementTitleChange() {
+        settlementTitle = this.value.trim();
+        persistLocalDraft();
+      });
+      document.getElementById("settlementDate").value = settlementDate;
+      document.getElementById("settlementDate").addEventListener("change", function onSettlementDateChange() {
+        settlementDate = this.value || getTodayDateInputValue();
+        persistLocalDraft();
+      });
       document.getElementById("scissorsPrice").value = scissorsPrice > 0 ? format(scissorsPrice) : "";
       document.getElementById("scissorsPrice").addEventListener("change", function onScissorsPriceChange() {
         scissorsPrice = parseMoneyInput(this.value);
