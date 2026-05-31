@@ -649,6 +649,17 @@
       });
     }
 
+    function getFirebaseErrorMessage(error) {
+      const code = String(error?.code || "");
+      if (code.includes("permission-denied")) {
+        return "Firebase 권한 오류입니다. Firestore 규칙에 rooms/items/presence 경로 허용이 필요합니다.";
+      }
+      if (code.includes("unavailable")) {
+        return "Firebase 연결이 일시적으로 불안정합니다. 잠시 후 다시 시도하세요.";
+      }
+      return "저장 중 오류가 발생했습니다.";
+    }
+
     function getRoomRef() {
       if (!firebaseReady || !currentCode) return null;
       return db.doc(db.firestore, "rooms", currentCode);
@@ -867,6 +878,7 @@
           setSyncStatus(`아이템 자동 저장 완료 · ${formatDateTime(Date.now())}`);
         } catch (error) {
           console.error("아이템 자동 저장 실패", error);
+          setSyncStatus(getFirebaseErrorMessage(error));
         } finally {
           autosaveTimers.delete(item.id);
         }
@@ -1128,7 +1140,7 @@
           }
           return;
         }
-        alert("저장 중 오류가 발생했습니다.");
+        alert(getFirebaseErrorMessage(error));
       }
     };
 
