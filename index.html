@@ -305,6 +305,8 @@
           </label>
         </div>
 
+        <div id="editingWarning" class="mb-4 hidden rounded-[1.5rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900"></div>
+
         <div id="itemsCards" class="space-y-4 md:hidden"></div>
 
         <div class="hidden overflow-x-auto md:block">
@@ -321,6 +323,19 @@
             </thead>
             <tbody id="itemsTable"></tbody>
           </table>
+        </div>
+
+        <div class="mt-4 flex flex-wrap justify-end gap-3">
+          <div class="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-600">
+            아이템은 자동 저장되며, 아래 버튼으로 즉시 저장도 할 수 있습니다.
+          </div>
+          <button
+            type="button"
+            onclick="saveItemsNow()"
+            class="rounded-2xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-700"
+          >
+            아이템 저장
+          </button>
         </div>
       </section>
 
@@ -363,10 +378,13 @@
   <script type="module">
     const siteConfig = window.SITE_CONFIG || {};
     const localStorageKey = "maple-raid-calculator-draft";
+    const sessionStorageKey = "maple-raid-calculator-session-id";
     const defaultMembers = ["갑", "을", "병", "정"].map((name) => ({ name, useSupport: false }));
     const auctionFeeRate = 0.1;
     const defaultInternalSaleDiscountRate = 15;
     const defaultItems = [{
+      id: "",
+      order: 0,
       name: "",
       salePrice: 0,
       receivedPrice: 0,
@@ -378,6 +396,10 @@
     }];
     const validFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
     const versionConflictErrorCode = "VERSION_CONFLICT";
+    const realtimeItemsStorageVersion = 2;
+    const autosaveDelayMs = 450;
+    const presenceHeartbeatMs = 8000;
+    const presenceActiveWindowMs = 15000;
 
     function getTodayDateInputValue() {
       const today = new Date();
@@ -386,7 +408,7 @@
     }
 
     let members = structuredClone(defaultMembers);
-    let items = structuredClone(defaultItems);
+    let items = ensureItemsHaveIds(structuredClone(defaultItems));
     let scissorsPrice = 0;
     let supportAmount = 0;
     let internalSaleDiscountRate = defaultInternalSaleDiscountRate;
@@ -396,6 +418,17 @@
     let loadedVersion = 0;
     let db = null;
     let firebaseReady = false;
+    let itemsUnsubscribe = null;
+    let roomPresenceUnsubscribe = null;
+    let autosaveTimers = new Map();
+    let dirtyItemIds = new Set();
+    let presenceHeartbeatTimer = null;
+    let lastPresenceAlertKey = "";
+    let isApplyingRemoteItems = false;
+    let hasRealtimeItemsLoaded = false;
+    const sessionClientId = sessionStorage.getItem(sessionStorageKey) || `client-${crypto.randomUUID()}`;
+    sessionStorage.setItem(sessionStorageKey, sessionClientId);
+    const sessionClientLabel = `브라우저 ${sessionClientId.slice(-4).toUpperCase()}`;
 
     function hasFirebaseConfig(config) {
       if (!config) return false;
@@ -446,6 +479,71 @@
       return Math.random().toString(36).substring(2, 8).toUpperCase();
     }
 
+    function generateItemId() {
+      return `item-${crypto.randomUUID()}`;
+    }
+
+    function ensureItemsHaveIds(sourceItems) {
+      return (Array.isArray(sourceItems) ? sourceItems : []).map((item, index) => normalizeItem(item, undefined, index));
+    }
+
+    function normalizeItemsOrder() {
+      items = items
+        .map((item, index) => ({
+          ...item,
+          order: index
+        }))
+        .sort((left, right) => Number(left.order || 0) - Number(right.order || 0));
+    }
+
+    function serializeItemForRemote(item, index) {
+      return {
+        id: item.id,
+        order: typeof index === "number" ? index : Number(item.order || 0),
+        name: String(item.name || ""),
+        salePrice: Number(item.salePrice || 0),
+        receivedPrice: Number(item.receivedPrice || 0),
+        owner: String(item.owner || members[0]?.name || defaultMembers[0].name),
+        useScissors: Boolean(item.useScissors),
+        isSold: Boolean(item.isSold),
+        isInternalSale: Boolean(item.isInternalSale),
+        internalBuyer: String(item.internalBuyer || members[0]?.name || defaultMembers[0].name),
+        updatedAt: Date.now()
+      };
+    }
+
+    function areItemsEquivalent(leftItems, rightItems) {
+      if (leftItems.length !== rightItems.length) return false;
+      return leftItems.every((leftItem, index) => {
+        const rightItem = rightItems[index];
+        if (!rightItem) return false;
+        return [
+          "id",
+          "order",
+          "name",
+          "salePrice",
+          "receivedPrice",
+          "owner",
+          "useScissors",
+          "isSold",
+          "isInternalSale",
+          "internalBuyer"
+        ].every((field) => leftItem[field] === rightItem[field]);
+      });
+    }
+
+    function renderEditingWarning(message = "") {
+      const warning = document.getElementById("editingWarning");
+      if (!warning) return;
+      if (!message) {
+        warning.classList.add("hidden");
+        warning.textContent = "";
+        return;
+      }
+      warning.textContent = message;
+      warning.classList.remove("hidden");
+    }
+
     function persistLocalDraft() {
       localStorage.setItem(
         localStorageKey,
@@ -465,7 +563,7 @@
 
     function resetToDefaults() {
       members = structuredClone(defaultMembers);
-      items = structuredClone(defaultItems);
+      items = ensureItemsHaveIds(structuredClone(defaultItems));
       scissorsPrice = 0;
       supportAmount = 0;
       internalSaleDiscountRate = defaultInternalSaleDiscountRate;
@@ -492,8 +590,8 @@
           useSupport: Boolean(member.useSupport)
         }));
         items = Array.isArray(draft.items) && draft.items.length
-          ? draft.items.map((item) => normalizeItem(item))
-          : structuredClone(defaultItems);
+          ? ensureItemsHaveIds(draft.items)
+          : ensureItemsHaveIds(structuredClone(defaultItems));
         scissorsPrice = Number(draft.scissorsPrice || 0);
         supportAmount = Number(draft.supportAmount || 0);
         internalSaleDiscountRate = Number(draft.internalSaleDiscountRate || defaultInternalSaleDiscountRate);
@@ -511,13 +609,13 @@
       }
 
       try {
-        const [{ initializeApp }, { getFirestore, doc, getDoc, runTransaction }] = await Promise.all([
+        const [{ initializeApp }, { getFirestore, doc, getDoc, runTransaction, collection, getDocs, setDoc, deleteDoc, query, orderBy, onSnapshot, writeBatch }] = await Promise.all([
           import("https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js"),
           import("https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js")
         ]);
 
         const app = initializeApp(siteConfig.firebase);
-        db = { firestore: getFirestore(app), doc, getDoc, runTransaction };
+        db = { firestore: getFirestore(app), doc, getDoc, runTransaction, collection, getDocs, setDoc, deleteDoc, query, orderBy, onSnapshot, writeBatch };
         firebaseReady = true;
         setSyncStatus("Firebase 연결 완료: 공유 링크 저장과 불러오기를 사용할 수 있습니다.");
       } catch (error) {
@@ -531,10 +629,11 @@
         settlementTitle,
         settlementDate,
         members,
-        items,
+        items: items.map((item, index) => serializeItemForRemote(item, index)),
         scissorsPrice,
         supportAmount,
         internalSaleDiscountRate,
+        itemsStorageVersion: realtimeItemsStorageVersion,
         version,
         updatedAt
       };
@@ -548,6 +647,232 @@
         hour: "2-digit",
         minute: "2-digit"
       });
+    }
+
+    function getRoomRef() {
+      if (!firebaseReady || !currentCode) return null;
+      return db.doc(db.firestore, "rooms", currentCode);
+    }
+
+    function getItemsCollectionRef() {
+      const roomRef = getRoomRef();
+      if (!roomRef) return null;
+      return db.collection(roomRef, "items");
+    }
+
+    function getItemDocRef(itemId) {
+      const itemsCollectionRef = getItemsCollectionRef();
+      if (!itemsCollectionRef || !itemId) return null;
+      return db.doc(itemsCollectionRef, itemId);
+    }
+
+    function getPresenceDocRef() {
+      const roomRef = getRoomRef();
+      if (!roomRef) return null;
+      return db.doc(db.collection(roomRef, "presence"), "editor");
+    }
+
+    function clearAutosaveTimers() {
+      autosaveTimers.forEach((timer) => clearTimeout(timer));
+      autosaveTimers.clear();
+    }
+
+    function markItemDirty(itemId) {
+      if (!itemId) return;
+      dirtyItemIds.add(itemId);
+    }
+
+    function clearItemDirty(itemId) {
+      if (!itemId) return;
+      dirtyItemIds.delete(itemId);
+    }
+
+    async function saveItemToRemote(item, index) {
+      const itemRef = getItemDocRef(item.id);
+      if (!itemRef) return;
+      await db.setDoc(itemRef, serializeItemForRemote(item, index));
+    }
+
+    async function deleteItemFromRemote(itemId) {
+      const itemRef = getItemDocRef(itemId);
+      if (!itemRef) return;
+      await db.deleteDoc(itemRef);
+    }
+
+    async function syncAllItemsToRemote() {
+      const itemsCollectionRef = getItemsCollectionRef();
+      if (!itemsCollectionRef) return;
+      normalizeItemsOrder();
+      const batch = db.writeBatch(db.firestore);
+      items.forEach((item, index) => {
+        const itemRef = db.doc(itemsCollectionRef, item.id);
+        batch.set(itemRef, serializeItemForRemote(item, index));
+        clearItemDirty(item.id);
+      });
+      await batch.commit();
+    }
+
+    async function flushDirtyItemsNow() {
+      if (!firebaseReady || !currentCode || !dirtyItemIds.size) return;
+      normalizeItemsOrder();
+      const dirtyIds = Array.from(dirtyItemIds);
+      await Promise.all(
+        dirtyIds.map(async (itemId) => {
+          const index = items.findIndex((item) => item.id === itemId);
+          if (index === -1) {
+            clearItemDirty(itemId);
+            return;
+          }
+          await saveItemToRemote(items[index], index);
+          clearItemDirty(itemId);
+        })
+      );
+    }
+
+    async function loadItemsFromRealtimeStore() {
+      const itemsCollectionRef = getItemsCollectionRef();
+      if (!itemsCollectionRef) return [];
+      const snapshot = await db.getDocs(db.query(itemsCollectionRef, db.orderBy("order", "asc")));
+      return snapshot.docs.map((docSnapshot, index) => normalizeItem(docSnapshot.data(), members[0]?.name || defaultMembers[0].name, index));
+    }
+
+    async function migrateRootItemsToRealtimeStore() {
+      if (!firebaseReady || !currentCode) return;
+      if (!items.length) {
+        items = ensureItemsHaveIds(structuredClone(defaultItems));
+      }
+      await syncAllItemsToRemote();
+    }
+
+    function stopRoomSubscriptions() {
+      if (itemsUnsubscribe) itemsUnsubscribe();
+      if (roomPresenceUnsubscribe) roomPresenceUnsubscribe();
+      itemsUnsubscribe = null;
+      roomPresenceUnsubscribe = null;
+      if (presenceHeartbeatTimer) {
+        clearInterval(presenceHeartbeatTimer);
+        presenceHeartbeatTimer = null;
+      }
+      renderEditingWarning("");
+    }
+
+    async function announceEditingPresence() {
+      const presenceRef = getPresenceDocRef();
+      if (!presenceRef) return;
+      try {
+        await db.setDoc(presenceRef, {
+          clientId: sessionClientId,
+          label: sessionClientLabel,
+          updatedAt: Date.now()
+        });
+      } catch (error) {
+        console.error("편집 상태 저장 실패", error);
+      }
+    }
+
+    function schedulePresenceHeartbeat() {
+      if (!firebaseReady || !currentCode) return;
+      announceEditingPresence();
+      if (presenceHeartbeatTimer) return;
+      presenceHeartbeatTimer = setInterval(() => {
+        announceEditingPresence();
+      }, presenceHeartbeatMs);
+    }
+
+    function handleRemotePresence(data) {
+      if (!data) {
+        renderEditingWarning("");
+        return;
+      }
+
+      const updatedAt = Number(data.updatedAt || 0);
+      const isActive = Date.now() - updatedAt < presenceActiveWindowMs;
+      const isOtherEditor = data.clientId && data.clientId !== sessionClientId;
+      if (!isActive || !isOtherEditor) {
+        lastPresenceAlertKey = "";
+        renderEditingWarning("");
+        return;
+      }
+
+      const warningMessage = "다른 사람이 작업중 입니다. 조금 이따가 작업해주세요.";
+      renderEditingWarning(`${warningMessage} 현재 작업 중: ${data.label || "다른 브라우저"} · ${formatDateTime(updatedAt)}`);
+      const alertKey = `${data.clientId}`;
+      if (alertKey !== lastPresenceAlertKey) {
+        lastPresenceAlertKey = alertKey;
+        window.setTimeout(() => {
+          alert(warningMessage);
+        }, 0);
+      }
+    }
+
+    function startRoomSubscriptions() {
+      stopRoomSubscriptions();
+      if (!firebaseReady || !currentCode) return;
+
+      const itemsCollectionRef = getItemsCollectionRef();
+      const presenceRef = getPresenceDocRef();
+      hasRealtimeItemsLoaded = false;
+
+      itemsUnsubscribe = db.onSnapshot(
+        db.query(itemsCollectionRef, db.orderBy("order", "asc")),
+        (snapshot) => {
+          if (snapshot.metadata.hasPendingWrites) return;
+          const remoteItems = snapshot.docs.map((docSnapshot, index) => normalizeItem(docSnapshot.data(), members[0]?.name || defaultMembers[0].name, index));
+          if (!snapshot.docs.length && !hasRealtimeItemsLoaded) {
+            hasRealtimeItemsLoaded = true;
+            return;
+          }
+          hasRealtimeItemsLoaded = true;
+          if (areItemsEquivalent(remoteItems, items)) return;
+          isApplyingRemoteItems = true;
+          items = remoteItems.length ? remoteItems : ensureItemsHaveIds(structuredClone(defaultItems));
+          renderItems();
+          calculate();
+          isApplyingRemoteItems = false;
+          setSyncStatus("다른 사용자의 아이템 변경사항을 반영했습니다.");
+        },
+        (error) => {
+          console.error("아이템 실시간 불러오기 실패", error);
+        }
+      );
+
+      roomPresenceUnsubscribe = db.onSnapshot(
+        presenceRef,
+        (snapshot) => {
+          handleRemotePresence(snapshot.exists() ? snapshot.data() : null);
+        },
+        (error) => {
+          console.error("편집 상태 감지 실패", error);
+        }
+      );
+    }
+
+    function scheduleItemAutosave(index) {
+      if (!firebaseReady || !currentCode || isApplyingRemoteItems) return;
+      const item = items[index];
+      if (!item?.id) return;
+      markItemDirty(item.id);
+      clearTimeout(autosaveTimers.get(item.id));
+      const timer = setTimeout(async () => {
+        try {
+          normalizeItemsOrder();
+          const currentIndex = items.findIndex((currentItem) => currentItem.id === item.id);
+          if (currentIndex === -1) {
+            clearItemDirty(item.id);
+            return;
+          }
+          await saveItemToRemote(items[currentIndex], currentIndex);
+          clearItemDirty(item.id);
+          persistLocalDraft();
+          setSyncStatus(`아이템 자동 저장 완료 · ${formatDateTime(Date.now())}`);
+        } catch (error) {
+          console.error("아이템 자동 저장 실패", error);
+        } finally {
+          autosaveTimers.delete(item.id);
+        }
+      }, autosaveDelayMs);
+      autosaveTimers.set(item.id, timer);
+      schedulePresenceHeartbeat();
     }
 
     async function saveData() {
@@ -612,13 +937,19 @@
         name: String(member.name || ""),
         useSupport: Boolean(member.useSupport)
       }));
-      items = Array.isArray(data.items) && data.items.length
-        ? data.items.map((item) => normalizeItem(item))
-        : structuredClone(defaultItems);
+      const remoteRealtimeItems = await loadItemsFromRealtimeStore();
+      items = remoteRealtimeItems.length
+        ? remoteRealtimeItems
+        : Array.isArray(data.items) && data.items.length
+          ? ensureItemsHaveIds(data.items)
+          : ensureItemsHaveIds(structuredClone(defaultItems));
       scissorsPrice = Number(data.scissorsPrice || 0);
       supportAmount = Number(data.supportAmount || 0);
       internalSaleDiscountRate = Number(data.internalSaleDiscountRate || defaultInternalSaleDiscountRate);
       loadedVersion = Number(data.version || 0);
+      if (!remoteRealtimeItems.length && Array.isArray(data.items) && data.items.length) {
+        await migrateRootItemsToRealtimeStore();
+      }
       setSyncStatus(`공유 데이터 불러오기 완료: 버전 ${loadedVersion}${data.updatedAt ? ` · ${formatDateTime(data.updatedAt)}` : ""}`);
     }
 
@@ -630,8 +961,10 @@
       return Number(String(value || "").replace(/[^\d.-]/g, "")) || 0;
     }
 
-    function normalizeItem(item, fallbackOwner = "갑") {
+    function normalizeItem(item, fallbackOwner = members[0]?.name || "갑", fallbackOrder = 0) {
       return {
+        id: String(item?.id || generateItemId()),
+        order: Number(item?.order ?? fallbackOrder),
         name: String(item?.name || ""),
         salePrice: Number(item?.salePrice || 0),
         receivedPrice: Number(item?.receivedPrice ?? item?.price ?? 0),
@@ -698,10 +1031,11 @@
 
       const memberNames = members.map((member) => member.name);
       items = items.map((item) => ({
-        ...normalizeItem(item, memberNames[0]),
+        ...normalizeItem(item, memberNames[0], item.order),
         owner: memberNames.includes(item.owner) ? item.owner : memberNames[0],
         internalBuyer: memberNames.includes(item.internalBuyer) ? item.internalBuyer : memberNames[0]
       }));
+      normalizeItemsOrder();
     }
 
     function getAdjustedItemPrice(item) {
@@ -756,9 +1090,11 @@
 
     window.generateShareCode = async function generateShareCode() {
       currentCode = generateRandomCode();
+      loadedVersion = 0;
       document.getElementById("shareCode").value = currentCode;
       window.history.replaceState({}, "", `?room=${encodeURIComponent(currentCode)}`);
       await saveData();
+      startRoomSubscriptions();
       alert(firebaseReady ? "공유 코드가 생성되고 저장되었습니다." : "공유 코드가 생성되었습니다. Firebase를 연결하면 이 코드로 공유할 수 있습니다.");
     };
 
@@ -779,6 +1115,7 @@
       }
 
       try {
+        await flushDirtyItemsNow();
         await saveData();
         alert(firebaseReady ? "Firebase와 브라우저에 저장되었습니다." : "브라우저에 임시 저장되었습니다.");
       } catch (error) {
@@ -822,12 +1159,15 @@
       renderMembers();
       renderItems();
       calculate();
+      startRoomSubscriptions();
     };
 
     window.resetCalculator = function resetCalculator() {
       const confirmed = window.confirm("현재 입력값과 로컬 저장 내용을 모두 초기화할까요?");
       if (!confirmed) return;
 
+      stopRoomSubscriptions();
+      clearAutosaveTimers();
       resetToDefaults();
       document.getElementById("shareCode").value = "";
       document.getElementById("settlementTitle").value = "";
@@ -868,6 +1208,8 @@
     window.addItem = function addItem() {
       members = members.length ? members : structuredClone(defaultMembers);
       items.push({
+        id: generateItemId(),
+        order: items.length,
         name: "",
         salePrice: 0,
         receivedPrice: 0,
@@ -877,28 +1219,67 @@
         isInternalSale: false,
         internalBuyer: members[0].name
       });
+      normalizeItemsOrder();
       renderItems();
       calculate();
+      scheduleItemAutosave(items.length - 1);
     };
 
-    window.removeItem = function removeItem(index) {
+    window.removeItem = async function removeItem(index) {
+      const removedItem = items[index];
       items.splice(index, 1);
+      clearItemDirty(removedItem?.id);
       if (!items.length) {
-        items = structuredClone(defaultItems);
+        items = ensureItemsHaveIds(structuredClone(defaultItems));
         items[0].owner = members[0]?.name || defaultMembers[0].name;
+        items[0].internalBuyer = members[0]?.name || defaultMembers[0].name;
       }
+      normalizeItemsOrder();
       renderItems();
       calculate();
+      if (firebaseReady && currentCode && removedItem?.id) {
+        try {
+          await deleteItemFromRemote(removedItem.id);
+          await syncAllItemsToRemote();
+        } catch (error) {
+          console.error("아이템 삭제 동기화 실패", error);
+        }
+      }
     };
 
-    window.clearItems = function clearItems() {
+    window.clearItems = async function clearItems() {
       const confirmed = window.confirm("아이템 목록을 모두 삭제할까요?");
       if (!confirmed) return;
-      items = structuredClone(defaultItems);
+      const removedItems = [...items];
+      removedItems.forEach((item) => clearItemDirty(item?.id));
+      items = ensureItemsHaveIds(structuredClone(defaultItems));
       items[0].owner = members[0]?.name || defaultMembers[0].name;
       items[0].internalBuyer = members[0]?.name || defaultMembers[0].name;
+      normalizeItemsOrder();
       renderItems();
       calculate();
+      if (firebaseReady && currentCode) {
+        try {
+          await Promise.all(removedItems.filter((item) => item?.id).map((item) => deleteItemFromRemote(item.id)));
+          await syncAllItemsToRemote();
+        } catch (error) {
+          console.error("아이템 일괄 삭제 동기화 실패", error);
+        }
+      }
+    };
+
+    window.saveItemsNow = async function saveItemsNow() {
+      if (!currentCode) {
+        alert("먼저 공유 코드를 생성하세요.");
+        return;
+      }
+      try {
+        clearAutosaveTimers();
+        await flushDirtyItemsNow();
+        await window.manualSave();
+      } catch (error) {
+        console.error(error);
+      }
     };
 
     function renderMembers() {
@@ -1199,18 +1580,37 @@
       });
 
       document.querySelectorAll(".item-name").forEach((input) => {
-        input.addEventListener("change", function onItemNameChange() {
-          items[Number(this.dataset.index)].name = this.value;
+        input.addEventListener("input", function onItemNameInput() {
+          const index = Number(this.dataset.index);
+          items[index].name = this.value;
           persistLocalDraft();
+          scheduleItemAutosave(index);
+          schedulePresenceHeartbeat();
         });
         input.addEventListener("keydown", function onItemNameKeydown(event) {
           if (event.key !== "Enter") return;
           event.preventDefault();
           focusItemField(Number(this.dataset.index), "item-sale-price");
         });
+        input.addEventListener("focus", function onItemNameFocus() {
+          schedulePresenceHeartbeat();
+        });
       });
 
       document.querySelectorAll(".item-sale-price").forEach((input) => {
+        input.addEventListener("input", function onItemSalePriceInput() {
+          const index = Number(this.dataset.index);
+          const salePrice = parseMoneyInput(this.value);
+          items[index].salePrice = salePrice;
+          if (salePrice > 0) {
+            items[index].receivedPrice = items[index].isInternalSale
+              ? getInternalSalePriceFromMarket(salePrice)
+              : getReceivedAmountFromSale(salePrice);
+          }
+          calculate();
+          scheduleItemAutosave(index);
+          schedulePresenceHeartbeat();
+        });
         input.addEventListener("change", function onItemSalePriceChange() {
           const index = Number(this.dataset.index);
           const salePrice = parseMoneyInput(this.value);
@@ -1222,6 +1622,7 @@
           }
           renderItems();
           calculate();
+          scheduleItemAutosave(index);
         });
         input.addEventListener("keydown", function onItemSalePriceKeydown(event) {
           if (event.key !== "Enter") return;
@@ -1242,11 +1643,23 @@
             return;
           }
 
+          scheduleItemAutosave(index);
           focusItemField(index + 1, "item-name");
+        });
+        input.addEventListener("focus", function onItemSalePriceFocus() {
+          schedulePresenceHeartbeat();
         });
       });
 
       document.querySelectorAll(".item-received-price").forEach((input) => {
+        input.addEventListener("input", function onItemReceivedPriceInput() {
+          const index = Number(this.dataset.index);
+          if (Number(items[index].salePrice || 0) > 0) return;
+          items[index].receivedPrice = parseMoneyInput(this.value);
+          calculate();
+          scheduleItemAutosave(index);
+          schedulePresenceHeartbeat();
+        });
         input.addEventListener("change", function onItemReceivedPriceChange() {
           const index = Number(this.dataset.index);
           items[index].receivedPrice = parseMoneyInput(this.value);
@@ -1254,20 +1667,30 @@
             this.value = items[index].receivedPrice > 0 ? format(items[index].receivedPrice) : "";
           }
           calculate();
+          scheduleItemAutosave(index);
+        });
+        input.addEventListener("focus", function onItemReceivedPriceFocus() {
+          schedulePresenceHeartbeat();
         });
       });
 
       document.querySelectorAll(".item-owner").forEach((select) => {
         select.addEventListener("change", function onItemOwnerChange() {
-          items[Number(this.dataset.index)].owner = this.value;
+          const index = Number(this.dataset.index);
+          items[index].owner = this.value;
           calculate();
+          scheduleItemAutosave(index);
+          schedulePresenceHeartbeat();
         });
       });
 
       document.querySelectorAll(".item-use-scissors").forEach((checkbox) => {
         checkbox.addEventListener("change", function onItemScissorsChange() {
-          items[Number(this.dataset.index)].useScissors = this.checked;
+          const index = Number(this.dataset.index);
+          items[index].useScissors = this.checked;
           calculate();
+          scheduleItemAutosave(index);
+          schedulePresenceHeartbeat();
         });
       });
 
@@ -1285,21 +1708,29 @@
           }
           renderItems();
           calculate();
+          scheduleItemAutosave(index);
+          schedulePresenceHeartbeat();
         });
       });
 
       document.querySelectorAll(".item-is-sold").forEach((checkbox) => {
         checkbox.addEventListener("change", function onItemSoldChange() {
-          items[Number(this.dataset.index)].isSold = this.checked;
+          const index = Number(this.dataset.index);
+          items[index].isSold = this.checked;
           renderItems();
           persistLocalDraft();
+          scheduleItemAutosave(index);
+          schedulePresenceHeartbeat();
         });
       });
 
       document.querySelectorAll(".item-internal-buyer").forEach((select) => {
         select.addEventListener("change", function onItemInternalBuyerChange() {
-          items[Number(this.dataset.index)].internalBuyer = this.value;
+          const index = Number(this.dataset.index);
+          items[index].internalBuyer = this.value;
           calculate();
+          scheduleItemAutosave(index);
+          schedulePresenceHeartbeat();
         });
       });
     }
@@ -1640,8 +2071,14 @@
       renderShareMetaPreview();
       updateDocumentTitle();
       calculate();
+      startRoomSubscriptions();
       initializeAds();
     }
+
+    window.addEventListener("beforeunload", () => {
+      stopRoomSubscriptions();
+      clearAutosaveTimers();
+    });
 
     init();
   </script>
