@@ -424,6 +424,7 @@
     let dirtyItemIds = new Set();
     let presenceHeartbeatTimer = null;
     let lastPresenceAlertKey = "";
+    let lastLocalPresenceAt = 0;
     let isApplyingRemoteItems = false;
     let hasRealtimeItemsLoaded = false;
     const sessionClientId = sessionStorage.getItem(sessionStorageKey) || `client-${crypto.randomUUID()}`;
@@ -602,6 +603,14 @@
       }
     }
 
+    function detachRemoteRoomIfNoQueryRoom() {
+      const params = new URLSearchParams(window.location.search);
+      const room = String(params.get("room") || "").trim();
+      if (room) return;
+      currentCode = "";
+      loadedVersion = 0;
+    }
+
     async function initializeFirebase() {
       if (!hasFirebaseConfig(siteConfig.firebase)) {
         setSyncStatus("Firebase 설정 전: 현재 브라우저에만 임시 저장됩니다.");
@@ -764,6 +773,7 @@
         clearInterval(presenceHeartbeatTimer);
         presenceHeartbeatTimer = null;
       }
+      lastLocalPresenceAt = 0;
       renderEditingWarning("");
     }
 
@@ -783,9 +793,11 @@
 
     function schedulePresenceHeartbeat() {
       if (!firebaseReady || !currentCode) return;
+      lastLocalPresenceAt = Date.now();
       announceEditingPresence();
       if (presenceHeartbeatTimer) return;
       presenceHeartbeatTimer = setInterval(() => {
+        lastLocalPresenceAt = Date.now();
         announceEditingPresence();
       }, presenceHeartbeatMs);
     }
@@ -799,8 +811,14 @@
       const updatedAt = Number(data.updatedAt || 0);
       const isActive = Date.now() - updatedAt < presenceActiveWindowMs;
       const isOtherEditor = data.clientId && data.clientId !== sessionClientId;
+      const isLocallyActive = Date.now() - lastLocalPresenceAt < presenceActiveWindowMs;
       if (!isActive || !isOtherEditor) {
         lastPresenceAlertKey = "";
+        renderEditingWarning("");
+        return;
+      }
+
+      if (isLocallyActive) {
         renderEditingWarning("");
         return;
       }
@@ -2037,11 +2055,14 @@
 
     async function init() {
       restoreLocalDraft();
+      detachRemoteRoomIfNoQueryRoom();
       await initializeFirebase();
       await loadSharedData();
 
       if (currentCode) {
         document.getElementById("shareCode").value = currentCode;
+      } else {
+        document.getElementById("shareCode").value = "";
       }
 
       document.getElementById("settlementTitle").value = settlementTitle;
