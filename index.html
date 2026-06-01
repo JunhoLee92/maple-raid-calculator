@@ -607,6 +607,16 @@
       const params = new URLSearchParams(window.location.search);
       const room = String(params.get("room") || "").trim();
       if (room) return;
+      if (currentCode) {
+        settlementTitle = "";
+        settlementDate = getTodayDateInputValue();
+        members = structuredClone(defaultMembers);
+        items = ensureItemsHaveIds(structuredClone(defaultItems));
+        scissorsPrice = 0;
+        supportAmount = 0;
+        internalSaleDiscountRate = defaultInternalSaleDiscountRate;
+        localStorage.removeItem(localStorageKey);
+      }
       currentCode = "";
       loadedVersion = 0;
     }
