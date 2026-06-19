@@ -1108,6 +1108,16 @@
       return Object.fromEntries(entries.map((entry) => [entry.name, entry.floor]));
     }
 
+    function getTargetOffsetRange(targets) {
+      const targetOffsetStep = 1000;
+      const highestTarget = Math.max(...Object.values(targets), 0);
+      const estimatedFeeBuffer = highestTarget * 0.08;
+      return Math.max(
+        3000000,
+        Math.ceil(estimatedFeeBuffer / targetOffsetStep) * targetOffsetStep
+      );
+    }
+
     function focusItemField(index, fieldClass) {
       requestAnimationFrame(() => {
         const candidates = Array.from(document.querySelectorAll(`.${fieldClass}[data-index="${index}"]`));
@@ -1914,8 +1924,36 @@
       }
 
       let bestResult = null;
+      const targetOffsetRange = getTargetOffsetRange(desiredBaseTargets);
 
-      for (let offset = -3000000; offset <= 3000000; offset += 1000) {
+      function isBetterSimulation(simulation, currentBest) {
+        if (!currentBest) return true;
+        if (simulation.maxDeviation < currentBest.maxDeviation) return true;
+        if (
+          simulation.maxDeviation === currentBest.maxDeviation &&
+          simulation.totalDeviation < currentBest.totalDeviation
+        ) {
+          return true;
+        }
+        if (
+          simulation.maxDeviation === currentBest.maxDeviation &&
+          simulation.totalDeviation === currentBest.totalDeviation &&
+          simulation.diff < currentBest.diff
+        ) {
+          return true;
+        }
+        if (
+          simulation.maxDeviation === currentBest.maxDeviation &&
+          simulation.totalDeviation === currentBest.totalDeviation &&
+          simulation.diff === currentBest.diff &&
+          simulation.minimum > currentBest.minimum
+        ) {
+          return true;
+        }
+        return false;
+      }
+
+      function simulateTargetOffset(offset) {
         const targetMap = buildIntegerTargetMap(
           Object.fromEntries(
             Object.entries(desiredBaseTargets).map(([name, target]) => [name, target + offset])
@@ -1998,7 +2036,8 @@
         const maxDeviation = Math.max(...deviations);
         const totalDeviation = deviations.reduce((sum, value) => sum + value, 0);
 
-        const simulation = {
+        return {
+          offset,
           baseTarget: average + offset,
           targetMap,
           transfers,
@@ -2009,27 +2048,24 @@
           maxDeviation,
           totalDeviation
         };
+      }
 
-        if (
-          !bestResult ||
-          simulation.maxDeviation < bestResult.maxDeviation ||
-          (
-            simulation.maxDeviation === bestResult.maxDeviation &&
-            simulation.totalDeviation < bestResult.totalDeviation
-          ) ||
-          (
-            simulation.maxDeviation === bestResult.maxDeviation &&
-            simulation.totalDeviation === bestResult.totalDeviation &&
-            simulation.diff < bestResult.diff
-          ) ||
-          (
-            simulation.maxDeviation === bestResult.maxDeviation &&
-            simulation.totalDeviation === bestResult.totalDeviation &&
-            simulation.diff === bestResult.diff &&
-            simulation.minimum > bestResult.minimum
-          )
-        ) {
+      for (let offset = -targetOffsetRange; offset <= targetOffsetRange; offset += 1000) {
+        const simulation = simulateTargetOffset(offset);
+        if (isBetterSimulation(simulation, bestResult)) {
           bestResult = simulation;
+        }
+      }
+
+      if (bestResult) {
+        const refineStart = Math.max(-targetOffsetRange, bestResult.offset - 999);
+        const refineEnd = Math.min(targetOffsetRange, bestResult.offset + 999);
+
+        for (let offset = refineStart; offset <= refineEnd; offset += 1) {
+          const simulation = simulateTargetOffset(offset);
+          if (isBetterSimulation(simulation, bestResult)) {
+            bestResult = simulation;
+          }
         }
       }
 
