@@ -69,6 +69,29 @@
       </div>
     </header>
 
+    <section class="mt-6 rounded-[2rem] bg-white p-3 shadow-xl">
+      <div class="grid gap-3 md:grid-cols-2">
+        <button
+          id="settlementTabButton"
+          type="button"
+          class="rounded-[1.5rem] bg-slate-900 px-5 py-4 text-left text-white transition hover:bg-slate-800"
+        >
+          <div class="text-xs font-bold uppercase tracking-[0.2em] text-slate-300">Tool 1</div>
+          <div class="mt-2 text-xl font-black">보스 정산기</div>
+          <div class="mt-1 text-sm text-slate-300">분배금과 송금 경로를 계산합니다.</div>
+        </button>
+        <button
+          id="hpCalcTabButton"
+          type="button"
+          class="rounded-[1.5rem] bg-slate-100 px-5 py-4 text-left text-slate-700 transition hover:bg-slate-200"
+        >
+          <div class="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Tool 2</div>
+          <div class="mt-2 text-xl font-black text-slate-900">HP 계산기</div>
+          <div class="mt-1 text-sm text-slate-500">목표 HP에 필요한 순수 HP와 AP를 계산합니다.</div>
+        </button>
+      </div>
+    </section>
+
     <main id="calculator" class="mt-6 space-y-6">
       <section id="how-to-use" class="rounded-[2rem] bg-white p-6 shadow-xl">
         <h2 class="text-2xl font-black">사용안내</h2>
@@ -364,6 +387,176 @@
       </section>
     </main>
 
+    <section id="hpCalcView" class="mt-6 hidden space-y-6">
+      <section class="rounded-[2rem] bg-white p-6 shadow-xl">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 class="text-2xl font-black">HP 계산기</h2>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              빅뱅 이전 메이플 기준으로 목표 HP를 맞추기 위해 필요한 순수 HP와 추가 AP 수량을 계산합니다.
+              하이퍼바디, HP% 아이템, HP+ 아이템을 같이 반영할 수 있습니다.
+            </p>
+          </div>
+          <div class="rounded-[1.5rem] bg-slate-100 px-4 py-3 text-sm text-slate-600">
+            입력값은 이 브라우저에 자동 저장됩니다.
+          </div>
+        </div>
+      </section>
+
+      <section class="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+        <div class="rounded-[2rem] bg-white p-6 shadow-xl">
+          <div class="mb-4">
+            <h3 class="text-xl font-black">입력</h3>
+            <p class="mt-1 text-sm text-slate-600">필요한 수치만 바꾸면 결과가 바로 갱신됩니다.</p>
+          </div>
+
+          <div class="space-y-4">
+            <label class="block">
+              <span class="mb-2 block text-sm font-semibold text-slate-700">Y값 / 목표 HP</span>
+              <input
+                id="hpCalcTargetHp"
+                type="number"
+                min="0"
+                inputmode="numeric"
+                value="12500"
+                class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+              />
+            </label>
+
+            <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+              <div class="mb-2 text-sm font-semibold text-slate-700">하이퍼바디 적용 여부</div>
+              <label class="flex items-center gap-3 text-sm font-medium text-slate-700">
+                <input id="hpCalcHyperBody" type="checkbox" class="h-5 w-5 accent-slate-900" checked />
+                하이퍼바디 적용
+              </label>
+              <p class="mt-2 text-xs leading-5 text-slate-500">체크 시 순수 HP X의 60%를 내림 계산해 추가합니다.</p>
+            </div>
+
+            <label class="block">
+              <span class="mb-2 block text-sm font-semibold text-slate-700">HP% 아이템</span>
+              <input
+                id="hpCalcPercent"
+                type="number"
+                min="0"
+                inputmode="decimal"
+                value="42"
+                class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+              />
+              <span class="mt-2 block text-xs leading-5 text-slate-500">예: 42 입력 시 X의 42%를 내림 계산합니다.</span>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block text-sm font-semibold text-slate-700">HP+ 아이템</span>
+              <input
+                id="hpCalcFlat"
+                type="number"
+                min="0"
+                inputmode="numeric"
+                value="320"
+                class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+              />
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block text-sm font-semibold text-slate-700">현재 순수 HP</span>
+              <input
+                id="hpCalcCurrentHp"
+                type="number"
+                min="0"
+                inputmode="numeric"
+                placeholder="0"
+                class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+              />
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block text-sm font-semibold text-slate-700">직업 선택</span>
+              <select
+                id="hpCalcJob"
+                class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+              >
+                <option value="궁수">궁수</option>
+                <option value="도적">도적</option>
+                <option value="마법사">마법사</option>
+                <option value="해적">해적</option>
+              </select>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block text-sm font-semibold text-slate-700">AP 1당 HP 증가량</span>
+              <input
+                id="hpCalcApHp"
+                type="number"
+                min="0"
+                inputmode="numeric"
+                value="18"
+                class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
+              />
+              <span class="mt-2 block text-xs leading-5 text-slate-500">직업, 서버, 버전에 따라 달라질 수 있어 직접 수정 가능합니다.</span>
+              <span class="mt-1 block text-xs leading-5 text-slate-500">궁수/도적은 기본 18, 보수적으로 계산하려면 16으로 바꿔서 보세요.</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="space-y-6">
+          <div class="rounded-[2rem] bg-white p-6 shadow-xl">
+            <h3 class="text-xl font-black">결과</h3>
+            <div class="mt-5 grid gap-4 md:grid-cols-2">
+              <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+                <div class="text-sm font-bold text-slate-500">필요 순수 HP / X값</div>
+                <div id="hpCalcRequiredHpBig" class="mt-2 text-4xl font-black text-slate-900">0</div>
+              </div>
+              <div class="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-5">
+                <div class="text-sm font-bold text-emerald-700">찍어야 하는 AP 이상</div>
+                <div id="hpCalcRequiredApBig" class="mt-2 text-4xl font-black text-emerald-700">0</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-[2rem] bg-white p-6 shadow-xl">
+            <h3 class="text-xl font-black">계산 상세</h3>
+            <div class="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-200">
+              <table class="min-w-full border-collapse">
+                <tbody class="divide-y divide-slate-200">
+                  <tr class="bg-slate-50">
+                    <th class="px-4 py-4 text-left text-sm font-bold text-slate-600">필요 순수 HP / X값</th>
+                    <td id="hpCalcRequiredHp" class="px-4 py-4 text-right text-sm font-black text-slate-900">0</td>
+                  </tr>
+                  <tr>
+                    <th class="px-4 py-4 text-left text-sm font-bold text-slate-600">예상 최종 HP</th>
+                    <td id="hpCalcFinalHp" class="px-4 py-4 text-right text-sm font-black text-slate-900">0</td>
+                  </tr>
+                  <tr class="bg-slate-50">
+                    <th class="px-4 py-4 text-left text-sm font-bold text-slate-600">하이퍼바디 증가량</th>
+                    <td id="hpCalcHyperGain" class="px-4 py-4 text-right text-sm font-black text-slate-900">0</td>
+                  </tr>
+                  <tr>
+                    <th class="px-4 py-4 text-left text-sm font-bold text-slate-600">HP% 아이템 증가량</th>
+                    <td id="hpCalcPercentGain" class="px-4 py-4 text-right text-sm font-black text-slate-900">0</td>
+                  </tr>
+                  <tr class="bg-slate-50">
+                    <th class="px-4 py-4 text-left text-sm font-bold text-slate-600">HP+ 아이템 증가량</th>
+                    <td id="hpCalcFlatGain" class="px-4 py-4 text-right text-sm font-black text-slate-900">0</td>
+                  </tr>
+                  <tr>
+                    <th class="px-4 py-4 text-left text-sm font-bold text-slate-600">현재 순수 HP 기준 부족한 HP</th>
+                    <td id="hpCalcShortageHp" class="px-4 py-4 text-right text-sm font-black text-slate-900">0</td>
+                  </tr>
+                  <tr class="bg-slate-50">
+                    <th class="px-4 py-4 text-left text-sm font-bold text-slate-600">목표치까지 찍어야 하는 AP 이상</th>
+                    <td id="hpCalcRequiredAp" class="px-4 py-4 text-right text-sm font-black text-slate-900">0</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="mt-4 text-xs leading-5 text-slate-500">
+              최종 HP = X + floor(X * 하이퍼바디율) + floor(X * HP% / 100) + HP+
+            </p>
+          </div>
+        </div>
+      </section>
+    </section>
+
     <footer class="mt-6 rounded-[2rem] bg-white p-6 text-sm text-slate-600 shadow-xl">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>메이플 레이드 정산기</div>
@@ -378,6 +571,7 @@
   <script type="module">
     const siteConfig = window.SITE_CONFIG || {};
     const localStorageKey = "maple-raid-calculator-draft";
+    const hpCalcStorageKey = "maple-raid-hp-calc-draft";
     const sessionStorageKey = "maple-raid-calculator-session-id";
     const defaultMembers = ["갑", "을", "병", "정"].map((name) => ({ name, useSupport: false }));
     const auctionFeeRate = 0.1;
@@ -424,6 +618,8 @@
     let dirtyItemIds = new Set();
     let presenceHeartbeatTimer = null;
     let lastPresenceAlertKey = "";
+    let activeToolTab = "settlement";
+    let hpCalcElements = null;
     let lastLocalPresenceAt = 0;
     let isApplyingRemoteItems = false;
     let hasRealtimeItemsLoaded = false;
@@ -995,6 +1191,226 @@
 
     function format(number) {
       return Math.floor(Number(number) || 0).toLocaleString("ko-KR");
+    }
+
+    function getRequestedToolTabFromHash(hash = window.location.hash) {
+      return hash === "#hp-calc" ? "hp-calc" : "settlement";
+    }
+
+    function updateToolTabButtons() {
+      const settlementButton = document.getElementById("settlementTabButton");
+      const hpCalcButton = document.getElementById("hpCalcTabButton");
+      if (!settlementButton || !hpCalcButton) return;
+
+      const isSettlement = activeToolTab === "settlement";
+      settlementButton.className = isSettlement
+        ? "rounded-[1.5rem] bg-slate-900 px-5 py-4 text-left text-white transition hover:bg-slate-800"
+        : "rounded-[1.5rem] bg-slate-100 px-5 py-4 text-left text-slate-700 transition hover:bg-slate-200";
+      hpCalcButton.className = isSettlement
+        ? "rounded-[1.5rem] bg-slate-100 px-5 py-4 text-left text-slate-700 transition hover:bg-slate-200"
+        : "rounded-[1.5rem] bg-slate-900 px-5 py-4 text-left text-white transition hover:bg-slate-800";
+    }
+
+    function setActiveToolTab(tab, { updateHash = true, scroll = false } = {}) {
+      activeToolTab = tab === "hp-calc" ? "hp-calc" : "settlement";
+
+      const settlementView = document.getElementById("calculator");
+      const hpCalcView = document.getElementById("hpCalcView");
+      if (settlementView) {
+        settlementView.classList.toggle("hidden", activeToolTab !== "settlement");
+      }
+      if (hpCalcView) {
+        hpCalcView.classList.toggle("hidden", activeToolTab !== "hp-calc");
+      }
+
+      updateToolTabButtons();
+
+      if (updateHash) {
+        const nextHash = activeToolTab === "hp-calc" ? "#hp-calc" : "#settlement";
+        const nextUrl = `${window.location.pathname}${window.location.search}${nextHash}`;
+        window.history.replaceState(null, "", nextUrl);
+      }
+
+      if (scroll) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+
+    const hpCalcJobDefaults = {
+      "궁수": 18,
+      "도적": 18,
+      "마법사": 6,
+      "해적": 18
+    };
+
+    function readHpCalcNonNegativeNumber(input) {
+      const value = Number(input?.value);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    }
+
+    function getHpCalcGains(x, hyperEnabled, hpPercent, hpFlat) {
+      const hyperGain = hyperEnabled ? Math.floor(x * 0.6) : 0;
+      const percentGain = Math.floor((x * hpPercent) / 100);
+      const finalHp = x + hyperGain + percentGain + hpFlat;
+      return { hyperGain, percentGain, finalHp };
+    }
+
+    function findMinimumPureHp(targetHp, hyperEnabled, hpPercent, hpFlat) {
+      if (targetHp <= 0 || hpFlat >= targetHp) {
+        return 0;
+      }
+
+      let low = 0;
+      let high = Math.max(1, targetHp - hpFlat);
+
+      while (getHpCalcGains(high, hyperEnabled, hpPercent, hpFlat).finalHp < targetHp) {
+        high *= 2;
+      }
+
+      while (low < high) {
+        const mid = Math.floor((low + high) / 2);
+        if (getHpCalcGains(mid, hyperEnabled, hpPercent, hpFlat).finalHp >= targetHp) {
+          high = mid;
+        } else {
+          low = mid + 1;
+        }
+      }
+
+      return low;
+    }
+
+    function renderHpCalc(result) {
+      if (!hpCalcElements) return;
+
+      hpCalcElements.requiredHpBig.textContent = format(result.requiredHp);
+      hpCalcElements.requiredApBig.textContent = format(result.requiredAp);
+      hpCalcElements.requiredHp.textContent = format(result.requiredHp);
+      hpCalcElements.finalHp.textContent = format(result.finalHp);
+      hpCalcElements.hyperGain.textContent = format(result.hyperGain);
+      hpCalcElements.percentGain.textContent = format(result.percentGain);
+      hpCalcElements.flatGain.textContent = format(result.flatGain);
+      hpCalcElements.shortageHp.textContent = format(result.shortageHp);
+      hpCalcElements.requiredAp.textContent = format(result.requiredAp);
+    }
+
+    function persistHpCalcDraft() {
+      if (!hpCalcElements) return;
+
+      const draft = {
+        targetHp: hpCalcElements.targetHp.value,
+        hyperBody: hpCalcElements.hyperBody.checked,
+        hpPercent: hpCalcElements.hpPercent.value,
+        hpFlat: hpCalcElements.hpFlat.value,
+        currentHp: hpCalcElements.currentHp.value,
+        job: hpCalcElements.job.value,
+        apHp: hpCalcElements.apHp.value
+      };
+
+      localStorage.setItem(hpCalcStorageKey, JSON.stringify(draft));
+    }
+
+    function restoreHpCalcDraft() {
+      if (!hpCalcElements) return;
+
+      try {
+        const raw = localStorage.getItem(hpCalcStorageKey);
+        if (!raw) return;
+
+        const draft = JSON.parse(raw);
+        hpCalcElements.targetHp.value = draft.targetHp ?? hpCalcElements.targetHp.value;
+        hpCalcElements.hyperBody.checked = Boolean(draft.hyperBody);
+        hpCalcElements.hpPercent.value = draft.hpPercent ?? hpCalcElements.hpPercent.value;
+        hpCalcElements.hpFlat.value = draft.hpFlat ?? hpCalcElements.hpFlat.value;
+        hpCalcElements.currentHp.value = draft.currentHp ?? "";
+        hpCalcElements.job.value = draft.job ?? hpCalcElements.job.value;
+        hpCalcElements.apHp.value = draft.apHp ?? hpCalcElements.apHp.value;
+      } catch (error) {
+        console.warn("HP 계산기 임시 저장 복원 실패", error);
+      }
+    }
+
+    function calculateHpCalc() {
+      if (!hpCalcElements) return;
+
+      const targetHp = readHpCalcNonNegativeNumber(hpCalcElements.targetHp);
+      const hpPercent = readHpCalcNonNegativeNumber(hpCalcElements.hpPercent);
+      const hpFlat = readHpCalcNonNegativeNumber(hpCalcElements.hpFlat);
+      const currentHp = readHpCalcNonNegativeNumber(hpCalcElements.currentHp);
+      const apHp = readHpCalcNonNegativeNumber(hpCalcElements.apHp);
+      const hyperEnabled = hpCalcElements.hyperBody.checked;
+
+      if (targetHp <= 0) {
+        renderHpCalc({
+          requiredHp: 0,
+          finalHp: 0,
+          hyperGain: 0,
+          percentGain: 0,
+          flatGain: 0,
+          shortageHp: 0,
+          requiredAp: 0
+        });
+        persistHpCalcDraft();
+        return;
+      }
+
+      const requiredHp = findMinimumPureHp(targetHp, hyperEnabled, hpPercent, hpFlat);
+      const gains = getHpCalcGains(requiredHp, hyperEnabled, hpPercent, hpFlat);
+      const shortageHp = Math.max(0, requiredHp - currentHp);
+      const requiredAp = apHp > 0 ? Math.ceil(shortageHp / apHp) : 0;
+
+      renderHpCalc({
+        requiredHp,
+        finalHp: gains.finalHp,
+        hyperGain: gains.hyperGain,
+        percentGain: gains.percentGain,
+        flatGain: hpFlat,
+        shortageHp,
+        requiredAp
+      });
+
+      persistHpCalcDraft();
+    }
+
+    function initializeHpCalc() {
+      hpCalcElements = {
+        targetHp: document.getElementById("hpCalcTargetHp"),
+        hyperBody: document.getElementById("hpCalcHyperBody"),
+        hpPercent: document.getElementById("hpCalcPercent"),
+        hpFlat: document.getElementById("hpCalcFlat"),
+        currentHp: document.getElementById("hpCalcCurrentHp"),
+        job: document.getElementById("hpCalcJob"),
+        apHp: document.getElementById("hpCalcApHp"),
+        requiredHpBig: document.getElementById("hpCalcRequiredHpBig"),
+        requiredApBig: document.getElementById("hpCalcRequiredApBig"),
+        requiredHp: document.getElementById("hpCalcRequiredHp"),
+        finalHp: document.getElementById("hpCalcFinalHp"),
+        hyperGain: document.getElementById("hpCalcHyperGain"),
+        percentGain: document.getElementById("hpCalcPercentGain"),
+        flatGain: document.getElementById("hpCalcFlatGain"),
+        shortageHp: document.getElementById("hpCalcShortageHp"),
+        requiredAp: document.getElementById("hpCalcRequiredAp")
+      };
+
+      restoreHpCalcDraft();
+
+      hpCalcElements.job.addEventListener("change", () => {
+        hpCalcElements.apHp.value = hpCalcJobDefaults[hpCalcElements.job.value] ?? 18;
+        calculateHpCalc();
+      });
+
+      [
+        hpCalcElements.targetHp,
+        hpCalcElements.hyperBody,
+        hpCalcElements.hpPercent,
+        hpCalcElements.hpFlat,
+        hpCalcElements.currentHp,
+        hpCalcElements.apHp
+      ].forEach((element) => {
+        element.addEventListener("input", calculateHpCalc);
+        element.addEventListener("change", calculateHpCalc);
+      });
+
+      calculateHpCalc();
     }
 
     function parseMoneyInput(value) {
@@ -2100,6 +2516,18 @@
     }
 
     async function init() {
+      document.getElementById("settlementTabButton").addEventListener("click", () => {
+        setActiveToolTab("settlement", { updateHash: true, scroll: true });
+      });
+      document.getElementById("hpCalcTabButton").addEventListener("click", () => {
+        setActiveToolTab("hp-calc", { updateHash: true, scroll: true });
+      });
+      window.addEventListener("hashchange", () => {
+        setActiveToolTab(getRequestedToolTabFromHash(), { updateHash: false, scroll: false });
+      });
+
+      setActiveToolTab(getRequestedToolTabFromHash(), { updateHash: false, scroll: false });
+      initializeHpCalc();
       restoreLocalDraft();
       detachRemoteRoomIfNoQueryRoom();
       await initializeFirebase();
