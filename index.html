@@ -1479,27 +1479,9 @@
       return Number(item.receivedPrice || 0);
     }
 
-    const feeBrackets = [
-      { min: 100000, max: 1000000, rate: 0.008 },
-      { min: 1000000, max: 5000000, rate: 0.018 },
-      { min: 5000000, max: 10000000, rate: 0.03 },
-      { min: 10000000, max: 25000000, rate: 0.04 },
-      { min: 25000000, max: 100000000, rate: 0.05 },
-      { min: 100000000, max: Infinity, rate: 0.06 }
-    ];
-
     function calculateFee(amount) {
       if (amount < 100000) return 0;
-
-      let progressiveFee = 0;
-
-      feeBrackets.forEach(({ min, max, rate }) => {
-        if (amount <= min) return;
-        const taxableAmount = Math.min(amount, max) - min;
-        progressiveFee += taxableAmount * rate;
-      });
-
-      return Math.floor(progressiveFee) + 10000;
+      return Math.floor(Number(amount || 0) * 0.04);
     }
 
     function normalizeMembers() {
@@ -2245,7 +2227,7 @@
           <div class="mt-2 text-3xl font-black text-blue-700">${format(result.target)}</div>
         </div>
         <div class="rounded-[1.5rem] bg-rose-50 p-5">
-          <div class="text-sm text-slate-500">총 누진 수수료 예상</div>
+          <div class="text-sm text-slate-500">총 택배 수수료 예상</div>
           <div class="mt-2 text-3xl font-black text-rose-600">${format(result.totalFee)}</div>
         </div>
       `;
