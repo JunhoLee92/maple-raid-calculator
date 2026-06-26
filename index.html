@@ -1481,7 +1481,7 @@
 
     function calculateFee(amount) {
       if (amount < 100000) return 0;
-      return Math.floor(Number(amount || 0) * 0.04);
+      return Math.floor(Number(amount || 0) * 0.04) + 10000;
     }
 
     function normalizeMembers() {
